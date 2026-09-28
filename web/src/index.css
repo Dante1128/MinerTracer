@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  --color-mineral-50: #fffbeb;
+  --color-mineral-100: #fef3c7;
+  --color-mineral-400: #fbbf24;
+  --color-mineral-500: #f59e0b;
+  --color-mineral-600: #d97706;
+  --color-mineral-700: #b45309;
+}
+
+@layer base {
+  body {
+    @apply bg-stone-50 text-stone-900 antialiased;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-mineral-500;
+  }
+}
+
+@utility campo {
+  @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm shadow-sm transition
+    placeholder:text-stone-400 focus:border-mineral-500 focus:ring-2 focus:ring-mineral-500/20 focus:outline-none;
+}
+@utility etiqueta {
+  @apply mb-1 block text-sm font-medium text-stone-700;
+}
+@utility boton {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition
+    disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility boton-primario {
+  @apply boton bg-stone-900 text-white hover:bg-stone-700;
+}
+@utility boton-secundario {
+  @apply boton border border-stone-300 bg-white text-stone-800 hover:bg-stone-100;
+}
+@utility tarjeta {
+  @apply rounded-2xl border border-stone-200 bg-white shadow-sm;
+}
+@utility hash {
+  @apply font-mono text-xs break-all text-stone-600;
+}

@@ -1,0 +1,14 @@
+{
+  "name": "minertrace",
+  "private": true,
+  "scripts": {
+    "instalar": "npm install --prefix server && npm install --prefix web",
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "npm run dev --prefix server",
+    "dev:web": "npm run dev --prefix web",
+    "build": "npm run build --prefix web",
+    "start": "npm run start --prefix server",
+    "test": "npm test --prefix server",
+    "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix web"
+  }
+}
