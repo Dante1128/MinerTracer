@@ -3,7 +3,7 @@ import { api, ErrorApi } from './api.ts';
 import { ErrorWallet, useWallet } from './wallet.tsx';
 
 export type EstadoLote = 'Certificado' | 'EnVenta' | 'EnGarantia' | 'EnDisputa' | 'Vendido';
-export type AccionMercado = 'list_batch' | 'buy' | 'confirm' | 'refund';
+export type AccionMercado = 'list_batch' | 'buy' | 'confirm' | 'refund' | 'claim';
 
 export interface InfoToken {
   contrato: string;
@@ -13,7 +13,16 @@ export interface InfoToken {
 
 export type InfoMercado =
   | { habilitado: false }
-  | { habilitado: true; contrato_id: string; red: string; passphrase: string; token: InfoToken; tolerancia_bps: number };
+  | {
+      habilitado: true;
+      contrato_id: string;
+      red: string;
+      passphrase: string;
+      token: InfoToken;
+      tolerancia_bps: number;
+      /** Tras la compra, si el comprador no confirma ni hay disputa en este plazo, el vendedor puede cobrar. */
+      plazo_garantia_seg: number;
+    };
 
 export interface Venta {
   vendedor: string;
@@ -24,6 +33,26 @@ export interface Venta {
   version: number;
   lab: string;
   pureza_bps: number;
+  /** Segundos Unix (texto) desde los que el vendedor puede cobrar sin confirmación; null antes de la compra. */
+  vence_garantia: string | null;
+}
+
+/** Fecha ISO del vencimiento de la garantía, o null. */
+export const venceGarantia = (venta: Venta | null | undefined) =>
+  venta?.vence_garantia ? new Date(Number(venta.vence_garantia) * 1000).toISOString() : null;
+
+/** El vencimiento ya pasó (según el reloj local; el contrato usa la hora del ledger). */
+export const garantiaVencida = (venta: Venta | null | undefined) => {
+  const vence = venceGarantia(venta);
+  return vence !== null && new Date(vence).getTime() <= Date.now();
+};
+
+/** "7 días", "1 día", "45 minutos"… */
+export function formatoPlazo(segundos: number): string {
+  if (segundos >= 86400 && segundos % 86400 === 0) return `${segundos / 86400} ${segundos === 86400 ? 'día' : 'días'}`;
+  if (segundos >= 3600) return `${Math.round(segundos / 3600)} horas`;
+  if (segundos >= 60) return `${Math.round(segundos / 60)} minutos`;
+  return `${segundos} segundos`;
 }
 
 export interface ContraAnalisisEnCadena {

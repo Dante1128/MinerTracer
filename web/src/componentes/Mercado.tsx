@@ -10,6 +10,7 @@ import {
   type InfoToken,
   type PasoTransaccion,
   type ResultadoTransaccion,
+  venceGarantia,
 } from '../mercado.ts';
 import { useWallet } from '../wallet.tsx';
 
@@ -184,6 +185,14 @@ export function ResumenComercial({ estado, token, toleranciaBps }: { estado: Est
               <Cuenta direccion={venta.comprador} />
             </dd>
           </div>
+          {venceGarantia(venta) && estado.estado === 'EnGarantia' && (
+            <div>
+              <dt className="text-stone-500">Garantía vence</dt>
+              <dd title="Si para entonces el comprador no confirmó ni hay disputa, el vendedor puede cobrar">
+                {formatoFechaHora(venceGarantia(venta))}
+              </dd>
+            </div>
+          )}
         </>
       )}
       {contra && (
@@ -232,6 +241,8 @@ function describirEvento(e: EventoCronologia, token: InfoToken | null): { titulo
       return { titulo: 'Vendido: pago liberado al vendedor', detalle: `${precio(d.precio)} · el lote cambió de dueño` };
     case 'reembolsado':
       return { titulo: 'Reembolsado al comprador', detalle: precio(d.precio) };
+    case 'pago_reclamado':
+      return { titulo: 'Plazo de garantía vencido: el vendedor cobró', detalle: `${precio(d.precio)} · el lote cambió de dueño` };
     default:
       return { titulo: e.tipo };
   }

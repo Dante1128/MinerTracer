@@ -6,7 +6,7 @@ import { ContratoSoroban, FondosInsuficientes, PASSPHRASE } from '../stellar/con
 import { aJson, IndexadorEventos } from './indexador.ts';
 
 /** Acciones del marketplace que firma la wallet del vendedor o del comprador. */
-export const ACCIONES = ['list_batch', 'buy', 'confirm', 'refund'] as const;
+export const ACCIONES = ['list_batch', 'buy', 'confirm', 'refund', 'claim'] as const;
 export type Accion = (typeof ACCIONES)[number];
 
 const SIN_VENTA = 22;
@@ -27,6 +27,8 @@ export interface Venta {
   version: number;
   lab: string;
   pureza_bps: number;
+  /** Segundos Unix (texto) desde los que el vendedor puede cobrar sin confirmación; null si aún no se compró. */
+  vence_garantia: string | null;
 }
 
 export interface ContraAnalisisEnCadena {
@@ -81,7 +83,7 @@ export class Mercado {
   readonly indexador: IndexadorEventos;
   private db: Db;
   private token: Promise<InfoToken> | null = null;
-  private tolerancia: Promise<number> | null = null;
+  private configuracion: Promise<{ tolerancia_bps: number; plazo_garantia_seg: number }> | null = null;
 
   constructor(db: Db, rpcUrl: string, contratoId: string) {
     this.db = db;
@@ -90,8 +92,8 @@ export class Mercado {
   }
 
   async info() {
-    const [token, tolerancia_bps] = await Promise.all([this.infoToken(), this.toleranciaBps()]);
-    return { contrato_id: this.contrato.contratoId, red: 'testnet', passphrase: PASSPHRASE, token, tolerancia_bps };
+    const [token, { tolerancia_bps, plazo_garantia_seg }] = await Promise.all([this.infoToken(), this.leerConfiguracion()]);
+    return { contrato_id: this.contrato.contratoId, red: 'testnet', passphrase: PASSPHRASE, token, tolerancia_bps, plazo_garantia_seg };
   }
 
   async estadoLote(loteId: string): Promise<EstadoComercial | null> {
@@ -175,6 +177,8 @@ export class Mercado {
         return this.contrato.prepararTransaccion('confirm', { comprador: cuenta, lote_id: loteId }, cuenta);
       case 'refund':
         return this.contrato.prepararTransaccion('refund', { comprador: cuenta, lote_id: loteId }, cuenta);
+      case 'claim':
+        return this.contrato.prepararTransaccion('claim', { vendedor: cuenta, lote_id: loteId }, cuenta);
     }
   }
 
@@ -220,15 +224,15 @@ export class Mercado {
     return this.token;
   }
 
-  private toleranciaBps(): Promise<number> {
-    this.tolerancia ??= this.contrato
-      .leer<{ tolerancia_bps: number }>('get_config')
-      .then((c) => Number(c.tolerancia_bps))
+  private leerConfiguracion() {
+    this.configuracion ??= this.contrato
+      .leer<{ tolerancia_bps: number; plazo_garantia_seg: bigint }>('get_config')
+      .then((c) => ({ tolerancia_bps: Number(c.tolerancia_bps), plazo_garantia_seg: Number(c.plazo_garantia_seg) }))
       .catch((error) => {
-        this.tolerancia = null;
+        this.configuracion = null;
         throw error;
       });
-    return this.tolerancia;
+    return this.configuracion;
   }
 
   /** Agrega el tipo de mineral, el origen y el laboratorio (nombre) desde la base de datos. */

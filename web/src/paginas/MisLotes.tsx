@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api, ErrorApi } from '../api.ts';
 import { AvisoWallet, Cuenta, EstadoTransaccion, PillEstadoLote } from '../componentes/Mercado.tsx';
+import { formatoFechaHora } from '../formato.ts';
 import {
+  formatoPlazo,
   formatoPrecio,
   formatoPureza,
+  garantiaVencida,
   useInfoMercado,
   useTransaccion,
+  venceGarantia,
   type EstadoComercial,
   type InfoToken,
 } from '../mercado.ts';
@@ -71,6 +75,7 @@ export function MisLotes() {
               cuenta={cuenta}
               token={info.token}
               toleranciaBps={info.tolerancia_bps}
+              plazoSeg={info.plazo_garantia_seg}
               alCambiar={() => setRecarga((n) => n + 1)}
             />
           ))}
@@ -85,12 +90,14 @@ function TarjetaLote({
   cuenta,
   token,
   toleranciaBps,
+  plazoSeg,
   alCambiar,
 }: {
   lote: EstadoComercial;
   cuenta: string;
   token: InfoToken;
   toleranciaBps: number;
+  plazoSeg: number;
   alCambiar: () => void;
 }) {
   const tx = useTransaccion();
@@ -100,7 +107,8 @@ function TarjetaLote({
   const esComprador = venta?.comprador === cuenta;
   const esVendedor = venta?.vendedor === cuenta;
 
-  const ejecutar = async (accion: 'list_batch' | 'confirm' | 'refund') => {
+  const vence = venceGarantia(venta);
+  const ejecutar = async (accion: 'list_batch' | 'confirm' | 'refund' | 'claim') => {
     if (await tx.ejecutar(accion, lote.lote_id, accion === 'list_batch' ? precio : undefined)) alCambiar();
   };
 
@@ -159,10 +167,18 @@ function TarjetaLote({
 
       {esVendedor && estado === 'EnVenta' && <p className="text-sm text-stone-600">Publicado: esperando comprador.</p>}
       {esVendedor && estado === 'EnGarantia' && (
-        <p className="text-sm text-stone-600">
-          Comprado por <Cuenta direccion={venta?.comprador} />. El pago está en garantía: lo recibirá cuando el comprador
-          confirme la recepción.
-        </p>
+        <div className="space-y-2">
+          <p className="text-sm text-stone-600">
+            Comprado por <Cuenta direccion={venta?.comprador} />. El pago está en garantía: lo recibirá cuando el comprador
+            confirme la recepción
+            {vence && <> o, si no confirma ni hay disputa, a partir del {formatoFechaHora(vence)}</>}.
+          </p>
+          {garantiaVencida(venta) && (
+            <button className="boton-primario" onClick={() => void ejecutar('claim')} disabled={tx.ocupado}>
+              {tx.ocupado ? 'Procesando…' : `Cobrar: venció el plazo de garantía (${formatoPrecio(venta!.precio, token)})`}
+            </button>
+          )}
+        </div>
       )}
       {esVendedor && estado === 'EnDisputa' && venta && (
         <p className="text-sm text-red-700">
@@ -184,6 +200,13 @@ function TarjetaLote({
               ? `El contra-análisis (${formatoPureza(contra.pureza_bps)}%) quedó dentro de la tolerancia de ${formatoPureza(toleranciaBps)} puntos.`
               : 'Puede pedir un contra-análisis a otro laboratorio antes de confirmar.'}{' '}
             Al confirmar, el vendedor cobra y el lote pasa a su nombre.
+            {vence && (
+              <>
+                {' '}
+                Tiene {formatoPlazo(plazoSeg)} desde la compra, hasta el <strong>{formatoFechaHora(vence)}</strong>: después, si no hay
+                disputa, el vendedor puede cobrar sin su confirmación.
+              </>
+            )}
           </p>
           <button className="boton-primario" onClick={() => void ejecutar('confirm')} disabled={tx.ocupado}>
             {tx.ocupado ? 'Procesando…' : 'Confirmar recepción y liberar el pago'}

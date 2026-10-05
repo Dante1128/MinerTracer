@@ -91,6 +91,7 @@ function enGarantia(cambios: Partial<EstadoComercial> = {}): EstadoComercial {
       version: 1,
       lab: cuentaLaboratorio('LAB-001'),
       pureza_bps: 7500,
+      vence_garantia: '0',
     },
     contra_analisis: null,
     ...cambios,

@@ -27,6 +27,9 @@ export const ERRORES_CONTRATO: Record<number, string> = {
   21: 'El lote está en disputa',
   22: 'El lote no tiene una venta en curso',
   23: 'El lote no tiene contra-análisis',
+  24: 'El plazo de la garantía debe ser mayor que cero',
+  25: 'Todavía no venció el plazo de la garantía',
+  26: 'La cuenta no es la vendedora del lote',
 };
 
 export const VERSION_DUPLICADA = 6;

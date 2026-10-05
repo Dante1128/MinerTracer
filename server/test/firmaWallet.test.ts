@@ -199,7 +199,7 @@ test('el contra-análisis con wallet solo se guarda si el contrato registró el 
     version: 1,
     lab: CUENTA_LAB1,
     pureza_bps: 7500,
-    venta: { vendedor: 'G', precio: '1', comprador: 'G2', analisis_id: 'AN-1', version: 1, lab: CUENTA_LAB1, pureza_bps: 7500 },
+    venta: { vendedor: 'G', precio: '1', comprador: 'G2', analisis_id: 'AN-1', version: 1, lab: CUENTA_LAB1, pureza_bps: 7500, vence_garantia: '0' },
     contra_analisis: null,
   };
   const lab2 = tokens['analista@lab002.test'];
