@@ -1,7 +1,22 @@
 import { useState } from 'react';
 import type { Analisis, EstadoVerificacion } from '../api.ts';
 
-export function EstadoAnclaje({ analisis }: { analisis: Pick<Analisis, 'estado_anclaje' | 'ultimo_error'> }) {
+export function EstadoAnclaje({
+  analisis,
+  esperaFirma = false,
+}: {
+  analisis: Pick<Analisis, 'estado_anclaje' | 'ultimo_error'>;
+  /** Pendiente de que el laboratorio firme con su wallet. */
+  esperaFirma?: boolean;
+}) {
+  if (esperaFirma) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-700 ring-1 ring-sky-600/20">
+        <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+        Falta la firma del laboratorio
+      </span>
+    );
+  }
   if (analisis.estado_anclaje === 'anclado') {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-600/20">

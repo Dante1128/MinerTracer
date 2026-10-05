@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
 import { api, ErrorApi, type AnalisisVerificado, type Lote } from '../api.ts';
 import { CamposAnalisis, MensajeError, aFormData, datosIniciales } from '../componentes/CamposAnalisis.tsx';
+import { esperaFirma, FirmaAnalisis } from '../componentes/FirmaLaboratorio.tsx';
 import { EstadoAnclaje, PillVerificacion } from '../componentes/Insignias.tsx';
 import { BannerVerificacion, DatosAnalisis, Evidencia } from '../componentes/Verificacion.tsx';
 import { formatoFechaHora, formatoPeso } from '../formato.ts';
@@ -23,6 +24,7 @@ export function DetalleAnalisis() {
   const [corrigiendo, setCorrigiendo] = useState(false);
   const [recarga, setRecarga] = useState(0);
   const recargar = useCallback(() => setRecarga((n) => n + 1), []);
+  const firmaWallet = info?.firma_laboratorio === 'wallet';
 
   useEffect(() => {
     let vigente = true;
@@ -32,7 +34,9 @@ export function DetalleAnalisis() {
         const d = await api<Detalle>(`/analisis/${encodeURIComponent(analisisId)}`);
         if (!vigente) return;
         setDetalle(d);
-        if (d.versiones.some((v) => v.estado_anclaje === 'pendiente')) temporizador = setTimeout(cargar, 2000);
+        // Se vuelve a consultar mientras haya anclajes en curso (no los que esperan la firma del laboratorio).
+        const enCurso = d.versiones.some((v) => v.estado_anclaje === 'pendiente' && !esperaFirma(v, firmaWallet));
+        if (enCurso) temporizador = setTimeout(cargar, 2000);
       } catch (e) {
         if (vigente) setError(e instanceof ErrorApi ? e.message : 'Error inesperado');
       }
@@ -42,7 +46,7 @@ export function DetalleAnalisis() {
       vigente = false;
       clearTimeout(temporizador);
     };
-  }, [analisisId, recarga]);
+  }, [analisisId, recarga, firmaWallet]);
 
   if (error) return <p className="py-16 text-center text-red-600">{error}</p>;
   if (!detalle) return <p className="py-16 text-center text-stone-500">Cargando…</p>;
@@ -60,7 +64,7 @@ export function DetalleAnalisis() {
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="font-mono text-3xl font-bold">{vigente.analisis_id}</h1>
           <span className="rounded bg-stone-200 px-2 py-0.5 font-mono text-xs">v{vigente.version}</span>
-          <EstadoAnclaje analisis={vigente} />
+          <EstadoAnclaje analisis={vigente} esperaFirma={esperaFirma(vigente, firmaWallet)} />
         </div>
         <p className="mt-1 text-stone-600">
           Lote <span className="font-mono">{lote.id}</span> · {lote.tipo_mineral} · {formatoPeso(lote.peso_kg)} · {lote.origen}
@@ -69,6 +73,11 @@ export function DetalleAnalisis() {
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_300px]">
         <div className="space-y-6 print:hidden">
+          {versiones
+            .filter((v) => esperaFirma(v, firmaWallet))
+            .map((v) => (
+              <FirmaAnalisis key={v.version} analisis={v} alTerminar={recargar} />
+            ))}
           <BannerVerificacion analisis={vigente} laboratorio={lote.laboratorio_id} />
           <section className="tarjeta p-6">
             <DatosAnalisis analisis={vigente} />

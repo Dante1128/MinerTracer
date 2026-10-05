@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api, ErrorApi, type Analisis, type Lote } from '../api.ts';
+import { esperaFirma } from '../componentes/FirmaLaboratorio.tsx';
 import { EstadoAnclaje } from '../componentes/Insignias.tsx';
 import { formatoFechaHora, formatoPeso } from '../formato.ts';
 import { anclajeReal, useInfoServidor } from '../infoServidor.ts';
@@ -9,6 +10,7 @@ import { useSesion } from '../sesion.tsx';
 export function Panel() {
   const { usuario } = useSesion();
   const info = useInfoServidor();
+  const firmaWallet = info?.firma_laboratorio === 'wallet';
   const [analisis, setAnalisis] = useState<Analisis[] | null>(null);
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [pestana, setPestana] = useState<'analisis' | 'lotes'>('analisis');
@@ -25,7 +27,7 @@ export function Panel() {
         setAnalisis(a);
         setLotes(l);
         setError(null);
-        if (a.some((x) => x.estado_anclaje === 'pendiente')) temporizador = setTimeout(cargar, 3000);
+        if (a.some((x) => x.estado_anclaje === 'pendiente' && !esperaFirma(x, firmaWallet))) temporizador = setTimeout(cargar, 3000);
       } catch (e) {
         if (vigente) setError(e instanceof ErrorApi ? e.message : 'Error inesperado al cargar el panel');
       }
@@ -35,7 +37,7 @@ export function Panel() {
       vigente = false;
       clearTimeout(temporizador);
     };
-  }, [recarga]);
+  }, [recarga, firmaWallet]);
 
   const pendientes = analisis?.filter((a) => a.estado_anclaje === 'pendiente').length ?? 0;
 
@@ -122,7 +124,7 @@ export function Panel() {
                     <td className="px-4 py-3 font-mono">{a.pureza}%</td>
                     <td className="hidden px-4 py-3 text-stone-600 md:table-cell">{formatoFechaHora(a.fecha_analisis)}</td>
                     <td className="px-4 py-3">
-                      <EstadoAnclaje analisis={a} />
+                      <EstadoAnclaje analisis={a} esperaFirma={esperaFirma(a, firmaWallet)} />
                     </td>
                   </tr>
                 ))}

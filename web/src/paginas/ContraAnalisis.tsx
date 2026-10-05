@@ -2,9 +2,19 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { api, ErrorApi } from '../api.ts';
 import { CamposAnalisis, MensajeError, aFormData, datosIniciales } from '../componentes/CamposAnalisis.tsx';
-import { Cuenta } from '../componentes/Mercado.tsx';
-import { formatoPureza, useInfoMercado, type DetalleComercial, type EstadoComercial } from '../mercado.ts';
+import { AvisoCuentaLaboratorio, useCuentaLaboratorio } from '../componentes/FirmaLaboratorio.tsx';
+import { Cuenta, EstadoTransaccion } from '../componentes/Mercado.tsx';
+import { useInfoServidor } from '../infoServidor.ts';
+import {
+  formatoPureza,
+  useFirmaConWallet,
+  useInfoMercado,
+  type DetalleComercial,
+  type EstadoComercial,
+  type ResultadoTransaccion,
+} from '../mercado.ts';
 import { useSesion } from '../sesion.tsx';
+import { useWallet } from '../wallet.tsx';
 
 interface Registrado {
   lote_id: string;
@@ -15,6 +25,10 @@ interface Registrado {
 export function ContraAnalisis() {
   const { usuario } = useSesion();
   const info = useInfoMercado();
+  const firmaWallet = useInfoServidor()?.firma_laboratorio === 'wallet';
+  const cuentaLab = useCuentaLaboratorio();
+  const wallet = useWallet();
+  const firma = useFirmaConWallet();
   const [pendientes, setPendientes] = useState<EstadoComercial[] | null>(null);
   const [loteId, setLoteId] = useState('');
   const [datos, setDatos] = useState(datosIniciales);
@@ -38,7 +52,32 @@ export function ContraAnalisis() {
     try {
       const form = aFormData(datos);
       form.set('lote_id', loteId);
-      const registro = await api<Registrado>('/contra-analisis', { form });
+      let registro: Registrado;
+      if (firmaWallet) {
+        // Preparar (el servidor sella el registro) → firmar con Freighter → enviar.
+        let enviado: Registrado | null = null;
+        const r = await firma.ejecutar(
+          async (cuenta) => {
+            form.set('cuenta', cuenta);
+            try {
+              return await api<{ xdr: string; registro: unknown; pdf_nombre: string }>('/contra-analisis/preparar', { form });
+            } catch (err) {
+              if (err instanceof ErrorApi) setErrores(err.errores);
+              throw err;
+            }
+          },
+          async (xdr, _cuenta, preparado) => {
+            enviado = await api<Registrado>('/contra-analisis/enviar', {
+              json: { registro: preparado.registro, pdf_nombre: preparado.pdf_nombre, xdr },
+            });
+            return { tx_id: enviado.tx_id, url_explorador: `https://stellar.expert/explorer/testnet/tx/${enviado.tx_id}`, fecha: '' } satisfies ResultadoTransaccion;
+          },
+        );
+        if (!r || !enviado) return;
+        registro = enviado;
+      } else {
+        registro = await api<Registrado>('/contra-analisis', { form });
+      }
       const detalle = await api<DetalleComercial>(`/mercado/lotes/${encodeURIComponent(registro.lote_id)}`).catch(() => null);
       setRegistrado({ registro, detalle });
       setDatos(datosIniciales());
@@ -69,7 +108,10 @@ export function ContraAnalisis() {
           {info?.habilitado && ` (${formatoPureza(info.tolerancia_bps)} puntos)`}, el lote pasa a disputa y el comprador puede
           recuperar su dinero. Solo puede hacerlo un laboratorio distinto del que certificó el lote.
         </p>
-        <p className="mt-1 text-sm text-stone-500">{usuario?.laboratorio_id} · firma el servidor con la cuenta del laboratorio (temporal).</p>
+        <p className="mt-1 text-sm text-stone-500">
+          {usuario?.laboratorio_id} ·{' '}
+          {firmaWallet ? 'se firma con la wallet del laboratorio (Freighter).' : 'firma el servidor con la cuenta del laboratorio.'}
+        </p>
       </div>
 
       {registrado && (
@@ -131,10 +173,17 @@ export function ContraAnalisis() {
             <CamposAnalisis datos={datos} cambiar={setDatos} errores={errores} pdfObligatorio />
           </section>
 
+          {firmaWallet && <AvisoCuentaLaboratorio cuenta={cuentaLab} />}
           {mensaje && <p className="rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{mensaje}</p>}
+          {firmaWallet && <EstadoTransaccion paso={firma.paso} error={firma.error} resultado={firma.resultado} />}
           <div className="flex justify-end">
-            <button className="boton-primario" disabled={enviando || !loteId}>
-              {enviando ? 'Registrando en el contrato…' : 'Registrar contra-análisis'}
+            <button
+              className="boton-primario"
+              disabled={
+                enviando || !loteId || (firmaWallet && (!wallet.direccion || !wallet.redCorrecta || wallet.direccion !== cuentaLab))
+              }
+            >
+              {enviando ? 'Registrando en el contrato…' : firmaWallet ? 'Firmar con Freighter y registrar' : 'Registrar contra-análisis'}
             </button>
           </div>
         </form>

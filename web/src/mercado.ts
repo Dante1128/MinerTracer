@@ -140,31 +140,38 @@ export interface ResultadoTransaccion {
 }
 
 /**
- * Ejecuta una acción del marketplace: el servidor arma la transacción, la
- * wallet conectada la firma y el servidor la envía y espera la confirmación.
+ * Ciclo de una transacción firmada por la wallet conectada: el servidor la
+ * arma (`preparar`), Freighter la firma y el servidor la envía y espera la
+ * confirmación (`enviar`). Expone el paso en curso y un error legible.
  */
-export function useTransaccion() {
+export function useFirmaConWallet() {
   const wallet = useWallet();
   const [paso, setPaso] = useState<PasoTransaccion>('inactivo');
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoTransaccion | null>(null);
 
-  const ejecutar = async (accion: AccionMercado, loteId: string, precio?: string): Promise<ResultadoTransaccion | null> => {
+  const ejecutar = async <P extends { xdr?: string }>(
+    preparar: (cuenta: string) => Promise<P>,
+    enviar: (xdrFirmado: string, cuenta: string, preparado: P) => Promise<ResultadoTransaccion>,
+  ): Promise<ResultadoTransaccion | null> => {
     setError(null);
     setResultado(null);
     try {
       if (!wallet.direccion) throw new ErrorWallet('Conecte su wallet Freighter para continuar.');
       if (!wallet.redCorrecta) throw new ErrorWallet(`Freighter está en ${wallet.red ?? 'otra red'}. Cambie a Testnet en la extensión.`);
+      const cuenta = wallet.direccion;
       setPaso('preparando');
-      const { xdr } = await api<{ xdr: string }>('/mercado/transacciones', {
-        json: { accion, cuenta: wallet.direccion, lote_id: loteId, precio },
-      });
-      setPaso('firmando');
-      const firmado = await wallet.firmar(xdr);
-      setPaso('enviando');
-      const r = await api<ResultadoTransaccion>('/mercado/transacciones/enviar', {
-        json: { accion, cuenta: wallet.direccion, xdr: firmado },
-      });
+      const preparado = await preparar(cuenta);
+      let r: ResultadoTransaccion;
+      if (preparado.xdr) {
+        setPaso('firmando');
+        const firmado = await wallet.firmar(preparado.xdr);
+        setPaso('enviando');
+        r = await enviar(firmado, cuenta, preparado);
+      } else {
+        // Ya estaba en la red (p. ej., firmado antes): no hace falta firmar.
+        r = preparado as unknown as ResultadoTransaccion;
+      }
       setResultado(r);
       setPaso('confirmada');
       return r;
@@ -182,4 +189,15 @@ export function useTransaccion() {
   };
 
   return { paso, error, resultado, ejecutar, reiniciar, ocupado: paso === 'preparando' || paso === 'firmando' || paso === 'enviando' };
+}
+
+/** Acción del marketplace firmada por la wallet del vendedor o del comprador. */
+export function useTransaccion() {
+  const firma = useFirmaConWallet();
+  const ejecutar = (accion: AccionMercado, loteId: string, precio?: string) =>
+    firma.ejecutar(
+      (cuenta) => api<{ xdr: string }>('/mercado/transacciones', { json: { accion, cuenta, lote_id: loteId, precio } }),
+      (xdr, cuenta) => api<ResultadoTransaccion>('/mercado/transacciones/enviar', { json: { accion, cuenta, xdr } }),
+    );
+  return { ...firma, ejecutar };
 }

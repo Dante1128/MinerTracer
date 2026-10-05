@@ -37,6 +37,8 @@ export interface Analisis {
   hash_anterior: string | null;
   motivo_correccion: string | null;
   estado_anclaje: 'pendiente' | 'anclado';
+  /** La firma el servidor (semilla); si no, la firma el laboratorio con su wallet. */
+  firma_servidor?: boolean;
   tx_id: string | null;
   fecha_anclaje: string | null;
   creado_en: string;
@@ -76,6 +78,8 @@ export interface InfoServidor {
   /** "simulada" (ANCLAJE=mock) o "testnet". */
   red: string;
   contrato_id: string | null;
+  /** "wallet": el laboratorio firma sus análisis con Freighter. */
+  firma_laboratorio: 'wallet' | 'servidor';
   motor_db: string;
   demo_alterar: boolean;
 }
