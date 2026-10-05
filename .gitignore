@@ -4,3 +4,8 @@ dev-dist/
 server/datos/
 .env
 *.log
+# Contrato Soroban: compilación, instantáneas que generan las pruebas y configuración local del CLI
+target/
+test_snapshots/
+.stellar/
+.soroban/
