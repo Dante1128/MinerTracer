@@ -3,12 +3,14 @@ extern crate std;
 
 use super::*;
 use soroban_sdk::testutils::{
-    Address as _, AuthorizedFunction, AuthorizedInvocation, Events as _, MockAuth, MockAuthInvoke,
+    Address as _, AuthorizedFunction, AuthorizedInvocation, Events as _, Ledger, MockAuth, MockAuthInvoke,
 };
 use soroban_sdk::xdr::{ScErrorCode, ScErrorType};
 use soroban_sdk::{symbol_short, token, Address, BytesN, Env, Event, IntoVal, InvokeError, String};
 
 const TOLERANCIA_BPS: u32 = 200;
+/// Siete días de garantía.
+const PLAZO_SEG: u64 = 7 * 24 * 60 * 60;
 /// 1000 unidades de un token de 7 decimales (como XLM).
 const PRECIO: i128 = 10_000_000_000;
 const LOTE: &str = "LT-2026-0457";
@@ -48,7 +50,7 @@ impl<'a> Prueba<'a> {
         let sac = env.register_stellar_asset_contract_v2(Address::generate(&env));
         token::StellarAssetClient::new(&env, &sac.address()).mint(&comprador, &(2 * PRECIO));
 
-        let id = env.register(MinerTrace, (admin.clone(), sac.address(), TOLERANCIA_BPS));
+        let id = env.register(MinerTrace, (admin.clone(), sac.address(), TOLERANCIA_BPS, PLAZO_SEG));
         let contrato = MinerTraceClient::new(&env, &id);
         contrato.add_lab(&lab_a, &texto(&env, "Laboratorio A"));
         contrato.add_lab(&lab_b, &texto(&env, "Laboratorio B"));
@@ -217,9 +219,13 @@ fn pureza_y_tolerancia_fuera_de_rango() {
     let env = Env::default();
     let token = Address::generate(&env);
     let resultado = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        env.register(MinerTrace, (Address::generate(&env), token, 10_001_u32))
+        env.register(MinerTrace, (Address::generate(&env), token.clone(), 10_001_u32, PLAZO_SEG))
     }));
     assert!(resultado.is_err(), "una tolerancia mayor que 100 % debe rechazarse");
+    let sin_plazo = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        env.register(MinerTrace, (Address::generate(&env), token, TOLERANCIA_BPS, 0_u64))
+    }));
+    assert!(sin_plazo.is_err(), "un plazo de garantía de cero debe rechazarse");
 }
 
 #[test]
@@ -386,7 +392,7 @@ fn llamadas_sin_la_autorizacion_correcta() {
     let lab = Address::generate(&env);
     let intruso = Address::generate(&env);
     let sac = env.register_stellar_asset_contract_v2(Address::generate(&env));
-    let id = env.register(MinerTrace, (admin.clone(), sac.address(), TOLERANCIA_BPS));
+    let id = env.register(MinerTrace, (admin.clone(), sac.address(), TOLERANCIA_BPS, PLAZO_SEG));
     let contrato = MinerTraceClient::new(&env, &id);
     let nombre = texto(&env, "Laboratorio A");
     let firma_de = |firmante: &Address, fn_name: &'static str, args: soroban_sdk::Vec<Val>| {
@@ -525,4 +531,62 @@ fn cada_accion_emite_un_evento() {
         [VentaConfirmada { lote_id: otro, vendedor: p.vendedor.clone(), comprador: p.comprador.clone(), precio: PRECIO }
             .to_xdr(env, &p.id)]
     );
+}
+
+#[test]
+fn el_vendedor_cobra_si_vence_el_plazo_sin_confirmacion() {
+    let p = Prueba::nueva();
+    p.env.ledger().with_mut(|l| l.timestamp = 1_000_000);
+    p.certificar();
+    p.publicar_y_comprar();
+    let venta = p.contrato.get_sale(&p.lote());
+    assert_eq!(venta.vence_garantia, Some(1_000_000 + PLAZO_SEG));
+
+    // Antes de vencer, solo el comprador puede liberar el pago.
+    assert_eq!(p.contrato.try_claim(&p.vendedor, &p.lote()), Err(Ok(Error::PlazoNoVencido)));
+    p.env.ledger().with_mut(|l| l.timestamp = 1_000_000 + PLAZO_SEG - 1);
+    assert_eq!(p.contrato.try_claim(&p.vendedor, &p.lote()), Err(Ok(Error::PlazoNoVencido)));
+
+    p.env.ledger().with_mut(|l| l.timestamp = 1_000_000 + PLAZO_SEG);
+    let extrano = Address::generate(&p.env);
+    assert_eq!(p.contrato.try_claim(&extrano, &p.lote()), Err(Ok(Error::NoEsVendedor)));
+    assert_eq!(p.contrato.try_claim(&p.comprador, &p.lote()), Err(Ok(Error::NoEsVendedor)));
+
+    p.contrato.claim(&p.vendedor, &p.lote());
+    assert_eq!(
+        p.env.events().all().filter_by_contract(&p.id),
+        [PagoReclamado { lote_id: p.lote(), vendedor: p.vendedor.clone(), comprador: p.comprador.clone(), precio: PRECIO }
+            .to_xdr(&p.env, &p.id)]
+    );
+    let lote = p.contrato.get_batch(&p.lote());
+    assert_eq!((lote.estado, lote.dueno), (EstadoLote::Vendido, p.comprador.clone()));
+    assert_eq!(p.token.balance(&p.vendedor), PRECIO);
+    assert_eq!(p.token.balance(&p.id), 0);
+    assert_eq!(p.contrato.try_claim(&p.vendedor, &p.lote()), Err(Ok(Error::LoteNoDisponible)));
+    assert_eq!(p.contrato.try_confirm(&p.comprador, &p.lote()), Err(Ok(Error::LoteNoDisponible)));
+}
+
+#[test]
+fn en_disputa_el_vendedor_no_cobra_aunque_venza_el_plazo() {
+    let p = Prueba::nueva();
+    p.certificar();
+    p.publicar_y_comprar();
+    p.contrato.counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 5), &7000);
+    p.env.ledger().with_mut(|l| l.timestamp += PLAZO_SEG * 2);
+    assert_eq!(p.contrato.try_claim(&p.vendedor, &p.lote()), Err(Ok(Error::LoteEnDisputa)));
+    // El comprador sigue pudiendo recuperar su dinero.
+    p.contrato.refund(&p.comprador, &p.lote());
+    assert_eq!(p.token.balance(&p.comprador), 2 * PRECIO);
+}
+
+#[test]
+fn el_plazo_se_guarda_en_la_configuracion() {
+    let p = Prueba::nueva();
+    let config = p.contrato.get_config();
+    assert_eq!((config.tolerancia_bps, config.plazo_garantia_seg), (TOLERANCIA_BPS, PLAZO_SEG));
+    // Sin compra no hay vencimiento.
+    p.certificar();
+    p.contrato.list_batch(&p.vendedor, &p.lote(), &PRECIO);
+    assert_eq!(p.contrato.get_sale(&p.lote()).vence_garantia, None);
+    assert_eq!(p.contrato.try_claim(&p.vendedor, &p.lote()), Err(Ok(Error::LoteNoDisponible)));
 }

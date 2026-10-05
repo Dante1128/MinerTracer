@@ -60,6 +60,11 @@ pub enum Error {
     LoteEnDisputa = 21,
     SinVenta = 22,
     SinContraAnalisis = 23,
+    /// El plazo de la garantía debe ser mayor que cero.
+    PlazoInvalido = 24,
+    /// El vendedor solo cobra sin confirmación cuando vence el plazo de la garantía.
+    PlazoNoVencido = 25,
+    NoEsVendedor = 26,
 }
 
 #[contracttype]
@@ -80,6 +85,8 @@ pub struct Config {
     pub token: Address,
     /// Diferencia máxima de pureza aceptada en un contra-análisis, en puntos básicos.
     pub tolerancia_bps: u32,
+    /// Si el comprador no confirma ni hay disputa en este plazo (segundos), el vendedor puede cobrar.
+    pub plazo_garantia_seg: u64,
 }
 
 #[contracttype]
@@ -114,6 +121,8 @@ pub struct Venta {
     pub version: u32,
     pub lab: Address,
     pub pureza_bps: u32,
+    /// Momento (segundos Unix) a partir del cual el vendedor puede cobrar; se fija al comprar.
+    pub vence_garantia: Option<u64>,
 }
 
 #[contracttype]
@@ -163,6 +172,7 @@ pub struct Configurado {
     pub admin: Address,
     pub token: Address,
     pub tolerancia_bps: u32,
+    pub plazo_garantia_seg: u64,
 }
 
 #[contractevent]
@@ -221,6 +231,15 @@ pub struct ContraAnalisisRegistrado {
 
 #[contractevent]
 pub struct VentaConfirmada {
+    #[topic]
+    pub lote_id: String,
+    pub vendedor: Address,
+    pub comprador: Address,
+    pub precio: i128,
+}
+
+#[contractevent]
+pub struct PagoReclamado {
     #[topic]
     pub lote_id: String,
     pub vendedor: Address,
@@ -300,22 +319,46 @@ fn transferir(env: &Env, desde: &Address, hacia: &Address, monto: i128) {
     token::Client::new(env, &config(env).token).transfer(desde, hacia, &monto);
 }
 
+/// Lote en garantía (sin disputa) con su venta en curso.
+fn venta_en_garantia(env: &Env, lote_id: &String) -> Result<(Lote, Venta), Error> {
+    let lote = leer_lote(env, lote_id)?;
+    match lote.estado {
+        EstadoLote::EnGarantia => {}
+        EstadoLote::EnDisputa => return Err(Error::LoteEnDisputa),
+        _ => return Err(Error::LoteNoDisponible),
+    }
+    let venta = leer_venta(env, lote_id).ok_or(Error::LoteNoDisponible)?;
+    Ok((lote, venta))
+}
+
+/// Paga al vendedor lo retenido y entrega el lote al comprador.
+fn liquidar(env: &Env, lote_id: &String, mut lote: Lote, venta: &Venta, comprador: &Address) {
+    transferir(env, &env.current_contract_address(), &venta.vendedor, venta.precio);
+    lote.dueno = comprador.clone();
+    lote.estado = EstadoLote::Vendido;
+    guardar_lote(env, lote_id, &lote);
+    borrar(env, &Clave::Venta(lote_id.clone()));
+}
+
 #[contract]
 pub struct MinerTrace;
 
 #[contractimpl]
 impl MinerTrace {
     /// Se ejecuta una sola vez, en la misma transacción del despliegue.
-    pub fn __constructor(env: Env, admin: Address, token: Address, tolerancia_bps: u32) {
+    pub fn __constructor(env: Env, admin: Address, token: Address, tolerancia_bps: u32, plazo_garantia_seg: u64) {
         if tolerancia_bps > PUREZA_MAX_BPS {
             panic_with_error!(&env, Error::ToleranciaInvalida);
         }
+        if plazo_garantia_seg == 0 {
+            panic_with_error!(&env, Error::PlazoInvalido);
+        }
         env.storage().instance().set(
             &Clave::Config,
-            &Config { admin: admin.clone(), token: token.clone(), tolerancia_bps },
+            &Config { admin: admin.clone(), token: token.clone(), tolerancia_bps, plazo_garantia_seg },
         );
         env.storage().instance().extend_ttl(UMBRAL_TTL, EXTENSION_TTL);
-        Configurado { admin, token, tolerancia_bps }.publish(&env);
+        Configurado { admin, token, tolerancia_bps, plazo_garantia_seg }.publish(&env);
     }
 
     pub fn get_config(env: Env) -> Config {
@@ -500,6 +543,7 @@ impl MinerTrace {
             version: lote.version,
             lab: lote.lab.clone(),
             pureza_bps: lote.pureza_bps,
+            vence_garantia: None,
         };
         guardar(&env, &Clave::Venta(lote_id.clone()), &venta);
         borrar(&env, &Clave::ContraAnalisis(lote_id.clone()));
@@ -529,6 +573,7 @@ impl MinerTrace {
         transferir(&env, &comprador, &env.current_contract_address(), venta.precio);
 
         venta.comprador = Some(comprador.clone());
+        venta.vence_garantia = Some(env.ledger().timestamp() + config(&env).plazo_garantia_seg);
         guardar(&env, &Clave::Venta(lote_id.clone()), &venta);
         lote.estado = EstadoLote::EnGarantia;
         guardar_lote(&env, &lote_id, &lote);
@@ -592,25 +637,30 @@ impl MinerTrace {
     /// El comprador confirma: el vendedor cobra y el lote cambia de dueño.
     pub fn confirm(env: Env, comprador: Address, lote_id: String) -> Result<(), Error> {
         comprador.require_auth();
-        let mut lote = leer_lote(&env, &lote_id)?;
-        match lote.estado {
-            EstadoLote::EnGarantia => {}
-            EstadoLote::EnDisputa => return Err(Error::LoteEnDisputa),
-            _ => return Err(Error::LoteNoDisponible),
-        }
-        let venta = leer_venta(&env, &lote_id).ok_or(Error::LoteNoDisponible)?;
+        let (lote, venta) = venta_en_garantia(&env, &lote_id)?;
         if venta.comprador.as_ref() != Some(&comprador) {
             return Err(Error::NoEsComprador);
         }
-
-        transferir(&env, &env.current_contract_address(), &venta.vendedor, venta.precio);
-
-        lote.dueno = comprador.clone();
-        lote.estado = EstadoLote::Vendido;
-        guardar_lote(&env, &lote_id, &lote);
-        borrar(&env, &Clave::Venta(lote_id.clone()));
-
+        liquidar(&env, &lote_id, lote, &venta, &comprador);
         VentaConfirmada { lote_id, vendedor: venta.vendedor, comprador, precio: venta.precio }.publish(&env);
+        Ok(())
+    }
+
+    /// Vencido el plazo de la garantía sin confirmación ni disputa, el vendedor
+    /// cobra y el lote pasa al comprador, igual que si hubiera confirmado.
+    pub fn claim(env: Env, vendedor: Address, lote_id: String) -> Result<(), Error> {
+        vendedor.require_auth();
+        let (lote, venta) = venta_en_garantia(&env, &lote_id)?;
+        if venta.vendedor != vendedor {
+            return Err(Error::NoEsVendedor);
+        }
+        let vence = venta.vence_garantia.ok_or(Error::LoteNoDisponible)?;
+        if env.ledger().timestamp() < vence {
+            return Err(Error::PlazoNoVencido);
+        }
+        let comprador = venta.comprador.clone().ok_or(Error::LoteNoDisponible)?;
+        liquidar(&env, &lote_id, lote, &venta, &comprador);
+        PagoReclamado { lote_id, vendedor, comprador, precio: venta.precio }.publish(&env);
         Ok(())
     }
 

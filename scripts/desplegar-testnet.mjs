@@ -13,6 +13,9 @@
 // Variables opcionales:
 //   TOKEN_CONTRATO  contrato del token de pago (por defecto, el XLM nativo de testnet)
 //   TOLERANCIA_BPS  diferencia de pureza aceptada en un contra-análisis (por defecto 200 = 2.00 %)
+//   PLAZO_GARANTIA_DIAS  días tras la compra en que el vendedor puede cobrar si el comprador
+//                        no confirma ni hay disputa (por defecto 7)
+//   PLAZO_GARANTIA_SEG   el mismo plazo en segundos (tiene prioridad; útil para probar)
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,6 +92,12 @@ if (!/^\d+$/.test(tolerancia) || Number(tolerancia) > 10000) {
   process.exit(1);
 }
 
+const plazo = process.env.PLAZO_GARANTIA_SEG || String(Math.round(Number(process.env.PLAZO_GARANTIA_DIAS || 7) * 86400));
+if (!/^\d+$/.test(plazo) || Number(plazo) === 0) {
+  console.error('El plazo de garantía debe ser un número entero de segundos mayor que cero');
+  process.exit(1);
+}
+
 paso('Compilando el contrato');
 stellar(['contract', 'build'], { cwd: dirContrato, stdio: ['ignore', 'ignore', 'inherit'] });
 
@@ -102,6 +111,7 @@ const contrato = stellar([
   '--admin', direcciones.admin,
   '--token', token,
   '--tolerancia_bps', tolerancia,
+  '--plazo_garantia_seg', plazo,
 ]);
 console.log(`  ${contrato}`);
 
@@ -134,4 +144,6 @@ para verlas: stellar keys secret <nombre>):
   vendedor    ${direcciones.vendedor}
   comprador   ${direcciones.comprador}
   token       ${token}
+
+Tolerancia de pureza: ${tolerancia} bps · plazo de garantía: ${plazo} s
 `);
