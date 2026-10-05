@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
-import { api, ErrorApi, type AnalisisVerificado, type InfoServidor, type Lote } from '../api.ts';
+import { api, ErrorApi, type AnalisisVerificado, type Lote } from '../api.ts';
 import { CamposAnalisis, MensajeError, aFormData, datosIniciales } from '../componentes/CamposAnalisis.tsx';
 import { EstadoAnclaje, PillVerificacion } from '../componentes/Insignias.tsx';
 import { BannerVerificacion, DatosAnalisis, Evidencia } from '../componentes/Verificacion.tsx';
 import { formatoFechaHora, formatoPeso } from '../formato.ts';
+import { useInfoServidor } from '../infoServidor.ts';
 import { useSesion } from '../sesion.tsx';
 
 interface Detalle {
@@ -18,14 +19,10 @@ export function DetalleAnalisis() {
   const { usuario } = useSesion();
   const [detalle, setDetalle] = useState<Detalle | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<InfoServidor | null>(null);
+  const info = useInfoServidor();
   const [corrigiendo, setCorrigiendo] = useState(false);
   const [recarga, setRecarga] = useState(0);
   const recargar = useCallback(() => setRecarga((n) => n + 1), []);
-
-  useEffect(() => {
-    api<InfoServidor>('/publico/info').then(setInfo).catch(() => {});
-  }, []);
 
   useEffect(() => {
     let vigente = true;

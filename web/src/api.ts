@@ -14,6 +14,8 @@ export interface Lote {
   peso_kg: string;
   origen: string;
   coordenadas: string | null;
+  /** Cuenta Stellar del dueño indicada al registrar el lote (null: a nombre del laboratorio). */
+  dueno?: string | null;
   creado_en: string;
   total_analisis?: number;
 }
@@ -71,6 +73,9 @@ export interface ResultadoLote {
 
 export interface InfoServidor {
   anclaje: string;
+  /** "simulada" (ANCLAJE=mock) o "testnet". */
+  red: string;
+  contrato_id: string | null;
   motor_db: string;
   demo_alterar: boolean;
 }

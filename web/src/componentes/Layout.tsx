@@ -1,4 +1,5 @@
 import { Link, NavLink, Outlet } from 'react-router';
+import { anclajeReal, useInfoServidor } from '../infoServidor.ts';
 import { useSesion } from '../sesion.tsx';
 
 export function Logo({ className = 'h-8 w-8' }: { className?: string }) {
@@ -10,6 +11,7 @@ const enlace = ({ isActive }: { isActive: boolean }) =>
 
 export function Layout() {
   const { usuario, salir } = useSesion();
+  const info = useInfoServidor();
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="bg-stone-900 print:hidden">
@@ -37,7 +39,8 @@ export function Layout() {
         <Outlet />
       </main>
       <footer className="border-t border-stone-200 py-6 text-center text-xs text-stone-500 print:hidden">
-        MinerTrace · Integridad verificable de análisis minerales · Prototipo (Fase 1: anclaje simulado)
+        MinerTrace · Integridad verificable de análisis minerales ·{' '}
+        {info === null ? 'Prototipo' : anclajeReal(info) ? `Anclado en Stellar ${info.red}` : 'Prototipo (anclaje simulado)'}
       </footer>
     </div>
   );

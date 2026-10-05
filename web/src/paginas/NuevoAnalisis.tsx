@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { api, ErrorApi, type Analisis, type Lote } from '../api.ts';
 import { CamposAnalisis, MensajeError, aFormData, datosIniciales } from '../componentes/CamposAnalisis.tsx';
 
-const LOTE_VACIO = { codigo: '', tipo_mineral: '', peso_kg: '', origen: '', coordenadas: '' };
+const LOTE_VACIO = { codigo: '', tipo_mineral: '', peso_kg: '', origen: '', coordenadas: '', dueno: '' };
 
 export function NuevoAnalisis() {
   const navegar = useNavigate();
@@ -158,6 +158,24 @@ export function NuevoAnalisis() {
                   required
                 />
                 <MensajeError texto={erroresLote.origen} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="etiqueta" htmlFor="dueno">
+                  Dirección Stellar del dueño (opcional)
+                </label>
+                <input
+                  id="dueno"
+                  className="campo font-mono"
+                  placeholder="G…"
+                  spellCheck={false}
+                  autoComplete="off"
+                  value={nuevoLote.dueno}
+                  onChange={(e) => setLote('dueno', e.target.value.trim())}
+                />
+                <p className="mt-1 text-xs text-stone-500">
+                  Cuenta que podrá vender el lote en el marketplace. Si la deja vacía, el lote queda a nombre del laboratorio.
+                </p>
+                <MensajeError texto={erroresLote.dueno} />
               </div>
             </div>
           ) : (
