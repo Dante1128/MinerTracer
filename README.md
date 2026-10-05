@@ -20,6 +20,7 @@ npm run dev               # API en :3000 + web en http://localhost:5173
 - Portal del laboratorio: http://localhost:5173/laboratorio
   - `analista@lab001.test` / `minertrace123` (registra lotes y análisis)
   - `supervisor@lab001.test` / `minertrace123` (además registra correcciones)
+  - `analista@lab002.test` y `supervisor@lab002.test`: segundo laboratorio (`LAB-002`), para contra-análisis
 
 Por defecto la base de datos es **PGlite** (PostgreSQL embebido en `server/datos/`), sin nada que instalar.
 Para usar el PostgreSQL local, cree la base y defina `DATABASE_URL` en `server/.env`:
@@ -55,7 +56,8 @@ Solo está disponible con `DEMO_ALTERAR=true` y nunca con `NODE_ENV=production`.
 server/src/
   integridad/canonico.ts     registro canónico, JCS (RFC 8785), SHA-256, salt
   anclaje/ServicioAnclaje.ts interfaz fija del servicio de anclaje
-  anclaje/AnclajeMock.ts     Fase 1 (TODO WEB3 → AnclajeStellar)
+  anclaje/AnclajeMock.ts     anclaje simulado (ANCLAJE=mock)
+  anclaje/AnclajeStellar.ts  anclaje en el contrato Soroban de testnet (ANCLAJE=stellar)
   anclaje/procesador.ts      anclaje asíncrono con reintentos y espera exponencial
   servicios/registro.ts      alta de lotes, análisis y correcciones (versiones)
   servicios/verificacion.ts  recalcula hash, consulta el anclaje, valida la firma y el PDF
@@ -76,8 +78,10 @@ scripts/desplegar-testnet.mjs  cuentas de prueba + despliegue del contrato en te
   y que se reemplace un `tx_id` ya anclado. Una corrección es una nueva versión enlazada por hash.
 - **La verificación nunca confía en el hash guardado en la fila:** lo recalcula a partir de los datos actuales
   y lo compara con el anclado, porque quien altera los datos puede alterar también esa columna.
-- **Interfaz de anclaje:** `anclar(hash, laboratorioId)` recibe también el laboratorio (el documento solo pasa el hash),
-  porque en Stellar la transacción debe firmarse con la clave de ese laboratorio.
+- **Interfaz de anclaje:** `anclar` recibe el análisis completo (laboratorio, lote, versión, hash anterior, pureza,
+  dueño), no solo el hash, porque el contrato registra todo eso y la transacción la firma el laboratorio.
+  `consultarAnclaje` recibe también `(analisis_id, version)`: se lee el estado del contrato, porque el RPC de
+  Stellar solo conserva las transacciones unos días.
 - **Verificación independiente:** `GET /api/publico/analisis/:id/v/:version/canonico.json` devuelve el texto exacto
   que se hasheó; `sha256sum` sobre ese archivo da el hash anclado.
 
@@ -87,6 +91,7 @@ scripts/desplegar-testnet.mjs  cuentas de prueba + despliegue del contrato en te
 npm test               # unitarias (canonicalización, validación) + flujo completo con PGlite en memoria
 npm run typecheck
 npm run contrato:test  # pruebas del contrato Soroban (cargo test)
+npm run test:testnet   # integración real contra el contrato en testnet (ver "Anclaje real")
 ```
 
 ## Fase 2: contrato Soroban (`contracts/minertrace`)
@@ -135,8 +140,38 @@ Variables opcionales: `TOKEN_CONTRATO` (contrato del token; por defecto, el XLM 
 Testnet se reinicia periódicamente y borra cuentas y contratos. Si pasa, vuelva a ejecutar el script:
 refondea las mismas identidades y despliega un contrato nuevo.
 
+## Anclaje real en Stellar (`ANCLAJE=stellar`)
+
+Con `ANCLAJE=stellar`, `AnclajeStellar` (`server/src/anclaje/AnclajeStellar.ts`) registra cada versión con
+`submit_analysis` en el contrato, y la verificación lee el contrato (`get_analysis`, `is_lab`), nunca la base de datos.
+El enlace de cada transacción lleva a stellar.expert (testnet).
+
+1. Despliegue el contrato: `npm run contrato:desplegar` (imprime el `CONTRACT_ID`).
+2. En `server/.env` (ver `server/.env.example`):
+   ```bash
+   ANCLAJE=stellar
+   STELLAR_CONTRATO_ID=C...                 # el que imprimió el script
+   STELLAR_SECRETO_LAB_001=S...             # stellar keys secret minertrace-lab-a
+   STELLAR_SECRETO_LAB_002=S...             # stellar keys secret minertrace-lab-b
+   STELLAR_DUENO_DEMO=G...                  # opcional: stellar keys public-key minertrace-vendedor
+   ```
+3. Use una base de datos nueva (otro `DATOS_DIR` o borre `server/datos/`): las cuentas de los laboratorios
+   sembrados en modo mock no son las de testnet.
+4. `npm run dev`. La semilla ancla el lote de ejemplo en el contrato en unos segundos.
+
+**Temporal:** por ahora el servidor firma con la clave de cada laboratorio (`STELLAR_SECRETO_*`). En la etapa 4
+el laboratorio firmará desde su propia wallet. Nunca suba esas claves al repositorio.
+
+El contrato es persistente: si reinicia la base de datos, despliegue también un contrato nuevo. Si no, los
+`analisis_id` de la base nueva (`AN-2026-0001`…) chocarían con los ya registrados y el anclaje fallaría con
+"El contrato ya tiene otra versión…". Si el servidor se cae después de enviar una transacción, el reintento no
+duplica nada: encuentra el registro en el contrato y recupera el ID de la transacción desde sus eventos.
+
+`npm run test:testnet` ejecuta la prueba de integración: registra, ancla, corrige, verifica y detecta un fraude
+contra el contrato real. Necesita `STELLAR_CONTRATO_ID`, `STELLAR_SECRETO_LAB_001` y `STELLAR_SECRETO_LAB_002`
+y usa códigos de lote y análisis únicos en cada ejecución.
+
 ## Pendiente
 
-- **Etapa 2:** `AnclajeStellar` (`ANCLAJE=stellar`) que registre los análisis en el contrato y verifique contra él.
 - **Etapa 3:** marketplace en el frontend con Freighter.
 - **Etapa 4:** firma del laboratorio con su propia wallet.

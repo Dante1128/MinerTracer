@@ -6,8 +6,9 @@ y el arranque para personas en [README.md](README.md).
 ## Qué es
 
 Trazabilidad e integridad de análisis minerales. Cada análisis se convierte en un registro canónico
-(JCS, RFC 8785), se hashea con SHA-256 y el hash se ancla en una blockchain. En la Fase 1 el anclaje
-está **simulado** (`AnclajeMock`); Stellar llega en la Fase 2 (busque `TODO WEB3`).
+(JCS, RFC 8785), se hashea con SHA-256 y el hash se ancla en una blockchain. Con `ANCLAJE=mock` el anclaje
+está **simulado** (`AnclajeMock`); con `ANCLAJE=stellar` se registra en el contrato Soroban de testnet
+(`AnclajeStellar`).
 
 ## Estructura
 
@@ -33,6 +34,7 @@ npm run typecheck    # tsc en server/ y web/
 npm run build        # compila web/dist
 npm run contrato:test       # cargo test del contrato
 npm run contrato:desplegar  # cuentas de prueba + despliegue en testnet
+npm run test:testnet        # integración contra el contrato en testnet (requiere variables STELLAR_*)
 ```
 
 Antes de dar un cambio por terminado, ejecute `npm run typecheck` y `npm test`
@@ -60,14 +62,21 @@ Antes de dar un cambio por terminado, ejecute `npm run typecheck` y `npm test`
   (`servicios/verificacion.ts`). No introduzca atajos que lean el hash almacenado.
 - **No cambie el formato del registro canónico** (`integridad/canonico.ts`) sin versionarlo: invalidaría
   todos los hashes ya anclados.
-- La interfaz `ServicioAnclaje` es fija; los proveedores nuevos se registran en `server/src/anclaje/index.ts`.
+- La interfaz `ServicioAnclaje` es el único punto de contacto con la blockchain; los proveedores se registran
+  en `server/src/anclaje/index.ts`. `consultarAnclaje` lee el contrato por `(analisis_id, version)`, no la base de datos.
+- Con `ANCLAJE=stellar`, `firma` en la verificación exige que la cuenta registrada en el contrato sea la del
+  laboratorio **y** que siga autorizada (`is_lab`). Los códigos de error del contrato están en
+  `server/src/anclaje/erroresContrato.ts`; manténgalos sincronizados con `contracts/minertrace/src/lib.rs`.
+- Nunca suba claves `STELLAR_SECRETO_*`: van en `server/.env` (ignorado) o en el entorno.
 - El endpoint `/api/demo` (simular fraude) solo existe con `DEMO_ALTERAR=true` y nunca en producción.
 - `JWT_SECRET` es obligatorio en producción.
 
 ## Datos de ejemplo
 
-`server/src/semilla.ts` crea el lote `LT-2026-0457` y los usuarios `analista@lab001.test` y
-`supervisor@lab001.test` (contraseña `minertrace123`). Para reiniciar PGlite, borre `server/datos/`.
+`server/src/semilla.ts` crea los laboratorios `LAB-001` y `LAB-002`, el lote `LT-2026-0457` y los usuarios
+`analista@lab001.test`, `supervisor@lab001.test`, `analista@lab002.test` y `supervisor@lab002.test`
+(contraseña `minertrace123`). Para reiniciar PGlite, borre `server/datos/`; con `ANCLAJE=stellar`, despliegue
+además un contrato nuevo (los `analisis_id` de la base nueva ya existirían en el contrato anterior).
 
 ## Git
 
