@@ -161,8 +161,8 @@ El enlace de cada transacción lleva a stellar.expert (testnet).
    sembrados en modo mock no son las de testnet.
 4. `npm run dev`. La semilla ancla el lote de ejemplo en el contrato en unos segundos.
 
-**Temporal:** por ahora el servidor firma con la clave de cada laboratorio (`STELLAR_SECRETO_*`). En la etapa 4
-el laboratorio firmará desde su propia wallet. Nunca suba esas claves al repositorio.
+**Quién firma:** el laboratorio, con su wallet (ver "El laboratorio firma con su propia wallet"). Las claves
+`STELLAR_SECRETO_*` solo sirven para la semilla, las pruebas y `FIRMA_LABORATORIO=servidor`. Nunca las suba al repositorio.
 
 El contrato es persistente: si reinicia la base de datos, despliegue también un contrato nuevo. Si no, los
 `analisis_id` de la base nueva (`AN-2026-0001`…) chocarían con los ya registrados y el anclaje fallaría con
@@ -197,7 +197,7 @@ certificado, publicado, comprado, contra-análisis, vendido o reembolsado.
 
 **Contra-análisis:** se sella con su propio registro canónico (`"tipo":"contra_analisis"`) y se registra en el
 contrato. La página pública lo verifica contra el contrato y ofrece su registro canónico y su PDF.
-Por ahora lo firma el servidor con la clave del laboratorio, igual que los análisis (temporal hasta la etapa 4).
+Lo firma la wallet del laboratorio, igual que los análisis.
 
 **Para probarlo:** importe en Freighter las cuentas de prueba (`stellar keys secret minertrace-vendedor` y
 `minertrace-comprador`), o use cuentas propias fondeadas con friendbot. Registre un lote indicando como dueño
@@ -205,7 +205,28 @@ la dirección del vendedor y siga el flujo: publicar → comprar → (contra-an�
 
 `npm run test:testnet` incluye una prueba del marketplace con cuentas nuevas fondeadas con friendbot.
 
+## El laboratorio firma con su propia wallet
+
+Con `FIRMA_LABORATORIO=wallet` (por defecto), el servidor no firma los análisis del portal:
+
+1. El analista registra el análisis. Queda guardado como **pendiente**: registrar nunca depende de la red.
+2. En el detalle del análisis aparece **Firmar y anclar con Freighter**. El servidor arma `submit_analysis`
+   con el hash que él calculó; Freighter muestra la transacción y el laboratorio la firma.
+3. El servidor la envía y **solo marca `anclado` después de leer el contrato** y comprobar que esa versión
+   existe con el mismo hash y la cuenta del laboratorio.
+
+**Convivencia con el procesador asíncrono:** el procesador ya no firma esos análisis; los **reconcilia**.
+Cada minuto busca en el contrato los que esperan firma. Si la transacción llegó a la red, pero el navegador
+se cerró antes de avisar o se firmó desde otro equipo, la encuentra y recupera su ID desde los eventos.
+Solo firma los análisis marcados con `firma_servidor` (la semilla, cuando hay `STELLAR_SECRETO_LAB_001`).
+
+El contra-análisis sigue el mismo principio: preparar (el servidor sella el registro) → firmar con Freighter →
+enviar. Se guarda solo si el contrato registró exactamente ese hash.
+
+Para probarlo, importe en Freighter la cuenta del laboratorio (`stellar keys secret minertrace-lab-a`) y
+conéctela en el portal. `FIRMA_LABORATORIO=servidor` conserva el modo anterior (firma el servidor con
+`STELLAR_SECRETO_*`), útil para desarrollar sin Freighter.
+
 ## Pendiente
 
-- **Etapa 4:** firma del laboratorio con su propia wallet.
 - **Retirar una publicación:** el contrato no tiene `unlist_batch`; un lote publicado sin comprador no se puede retirar.

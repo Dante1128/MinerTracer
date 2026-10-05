@@ -72,6 +72,10 @@ Antes de dar un cambio por terminado, ejecute `npm run typecheck` y `npm test`
   siempre del contrato; `eventos_contrato` (indexador) solo alimenta la línea de tiempo. Las wallets firman en el
   navegador con Freighter (`web/src/wallet.tsx`); el servidor arma la transacción sin firmar y la envía después,
   comprobando que sea la invocación pedida al contrato y desde la cuenta esperada.
+- Firma del laboratorio (`FIRMA_LABORATORIO=wallet`, por defecto): el portal firma `submit_analysis` y
+  `counter_analysis` con Freighter; el servidor arma la transacción, la envía y marca `anclado` solo tras leer
+  el contrato. El procesador solo reconcilia esos análisis (`buscarAnclaje`); firma únicamente los que tienen
+  `firma_servidor` (semilla y pruebas). No reintroduzca la firma en el servidor para el portal.
 - `npm run test:testnet` corre con `--test-concurrency=1`: dos pruebas firmando con la misma cuenta a la vez
   chocan en el número de secuencia de Stellar.
 - El endpoint `/api/demo` (simular fraude) solo existe con `DEMO_ALTERAR=true` y nunca en producción.
