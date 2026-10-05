@@ -66,6 +66,8 @@ server/src/
 web/src/
   paginas/                   Inicio, Verificar, ResultadoLote, Login, Panel, NuevoAnalisis, DetalleAnalisis
   componentes/               formulario de análisis, escáner QR, verificación, insignias
+server/src/mercado/          marketplace: estado comercial desde el contrato, transacciones para la wallet, indexador de eventos
+web/src/wallet.tsx           conexión con Freighter (testnet), firma de transacciones
 contracts/minertrace/        contrato Soroban (Rust): laboratorios, análisis versionados, marketplace con garantía
 scripts/desplegar-testnet.mjs  cuentas de prueba + despliegue del contrato en testnet
 ```
@@ -171,7 +173,39 @@ duplica nada: encuentra el registro en el contrato y recupera el ID de la transa
 contra el contrato real. Necesita `STELLAR_CONTRATO_ID`, `STELLAR_SECRETO_LAB_001` y `STELLAR_SECRETO_LAB_002`
 y usa códigos de lote y análisis únicos en cada ejecución.
 
+## Marketplace con garantía (requiere `ANCLAJE=stellar`)
+
+Vendedores y compradores no tienen usuario ni contraseña: se identifican con su wallet
+[Freighter](https://www.freighter.app/) en la red **Testnet**.
+
+| Ruta | Para | Qué hace |
+|---|---|---|
+| `/mercado` | todos | Lotes en venta leídos del contrato: pureza certificada, laboratorio, precio, estado |
+| `/mercado/:loteId` | comprador | Verificación completa del análisis + estado comercial + **Comprar** (firma `buy`) |
+| `/mis-lotes` | dueño / comprador | Publicar con precio (`list_batch`), confirmar la recepción (`confirm`) o pedir el reembolso en disputa (`refund`) |
+| `/laboratorio/contra-analisis` | segundo laboratorio | Contra-análisis de un lote en garantía (`counter_analysis`) |
+| `/verificar/:loteId` | todos | Además del análisis: estado comercial, contra-análisis y línea de tiempo |
+
+**Cómo se firma:** el servidor arma la transacción sin firmar (`POST /api/mercado/transacciones`), Freighter
+la muestra y la firma en el navegador, y el servidor la envía y espera la confirmación
+(`POST /api/mercado/transacciones/enviar`). El servidor nunca ve la clave de la wallet, y solo envía la
+invocación pedida, a este contrato y desde la cuenta indicada. La web solo carga `@stellar/freighter-api`.
+
+**Estado y línea de tiempo:** el estado comercial siempre se lee del contrato. Un indexador copia los eventos
+del contrato en la tabla `eventos_contrato` (el RPC solo los conserva unos días) para mostrar la línea de tiempo:
+certificado, publicado, comprado, contra-análisis, vendido o reembolsado.
+
+**Contra-análisis:** se sella con su propio registro canónico (`"tipo":"contra_analisis"`) y se registra en el
+contrato. La página pública lo verifica contra el contrato y ofrece su registro canónico y su PDF.
+Por ahora lo firma el servidor con la clave del laboratorio, igual que los análisis (temporal hasta la etapa 4).
+
+**Para probarlo:** importe en Freighter las cuentas de prueba (`stellar keys secret minertrace-vendedor` y
+`minertrace-comprador`), o use cuentas propias fondeadas con friendbot. Registre un lote indicando como dueño
+la dirección del vendedor y siga el flujo: publicar → comprar → (contra-análisis) → confirmar o reembolsar.
+
+`npm run test:testnet` incluye una prueba del marketplace con cuentas nuevas fondeadas con friendbot.
+
 ## Pendiente
 
-- **Etapa 3:** marketplace en el frontend con Freighter.
 - **Etapa 4:** firma del laboratorio con su propia wallet.
+- **Retirar una publicación:** el contrato no tiene `unlist_batch`; un lote publicado sin comprador no se puede retirar.
