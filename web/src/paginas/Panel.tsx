@@ -3,10 +3,12 @@ import { Link } from 'react-router';
 import { api, ErrorApi, type Analisis, type Lote } from '../api.ts';
 import { EstadoAnclaje } from '../componentes/Insignias.tsx';
 import { formatoFechaHora, formatoPeso } from '../formato.ts';
+import { anclajeReal, useInfoServidor } from '../infoServidor.ts';
 import { useSesion } from '../sesion.tsx';
 
 export function Panel() {
   const { usuario } = useSesion();
+  const info = useInfoServidor();
   const [analisis, setAnalisis] = useState<Analisis[] | null>(null);
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [pestana, setPestana] = useState<'analisis' | 'lotes'>('analisis');
@@ -46,9 +48,16 @@ export function Panel() {
           </p>
           <h1 className="text-3xl font-bold tracking-tight">Análisis registrados</h1>
         </div>
-        <Link to="/laboratorio/nuevo" className="boton-primario">
-          + Registrar análisis
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          {anclajeReal(info) && (
+            <Link to="/laboratorio/contra-analisis" className="boton-secundario">
+              Contra-análisis
+            </Link>
+          )}
+          <Link to="/laboratorio/nuevo" className="boton-primario">
+            + Registrar análisis
+          </Link>
+        </div>
       </div>
 
       {error && (

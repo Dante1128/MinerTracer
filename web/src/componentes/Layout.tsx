@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet } from 'react-router';
 import { anclajeReal, useInfoServidor } from '../infoServidor.ts';
+import { BotonWallet } from './Mercado.tsx';
 import { useSesion } from '../sesion.tsx';
 
 export function Logo({ className = 'h-8 w-8' }: { className?: string }) {
@@ -24,6 +25,11 @@ export function Layout() {
             <NavLink to="/verificar" className={enlace}>
               Verificar
             </NavLink>
+            {anclajeReal(info) && (
+              <NavLink to="/mercado" className={enlace}>
+                Mercado
+              </NavLink>
+            )}
             <NavLink to="/laboratorio" className={enlace}>
               Laboratorio
             </NavLink>
@@ -31,6 +37,11 @@ export function Layout() {
               <button onClick={salir} className="ml-1 rounded-lg px-3 py-2 text-sm text-stone-400 hover:text-white" title={usuario.email}>
                 Salir
               </button>
+            )}
+            {anclajeReal(info) && (
+              <span className="ml-2">
+                <BotonWallet />
+              </span>
             )}
           </div>
         </nav>

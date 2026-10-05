@@ -1,37 +1,10 @@
-import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { api, ErrorApi, type ResultadoLote as Resultado } from '../api.ts';
-import { PillVerificacion } from '../componentes/Insignias.tsx';
-import { BannerVerificacion, DatosAnalisis, Evidencia } from '../componentes/Verificacion.tsx';
-import { formatoFechaHora, formatoPeso } from '../formato.ts';
+import { AnalisisDelLote, SeccionComercial, useVerificacionLote } from '../componentes/VerificacionLote.tsx';
+import { formatoPeso } from '../formato.ts';
 
 export function ResultadoLote() {
   const { loteId = '' } = useParams();
-  const [resultado, setResultado] = useState<Resultado | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let vigente = true;
-    let temporizador: ReturnType<typeof setTimeout>;
-    const cargar = async () => {
-      try {
-        const r = await api<Resultado>(`/publico/lotes/${encodeURIComponent(loteId)}`);
-        if (!vigente) return;
-        setResultado(r);
-        setError(null);
-        // Mientras haya anclajes en curso, se vuelve a consultar.
-        if (r.analisis.some((g) => g.vigente.verificacion.estado === 'pendiente')) temporizador = setTimeout(cargar, 3000);
-      } catch (e) {
-        if (vigente) setError(e instanceof ErrorApi ? e.message : 'Error inesperado');
-      }
-    };
-    setResultado(null);
-    void cargar();
-    return () => {
-      vigente = false;
-      clearTimeout(temporizador);
-    };
-  }, [loteId]);
+  const { resultado, error } = useVerificacionLote(loteId);
 
   if (error) {
     return (
@@ -64,42 +37,15 @@ export function ResultadoLote() {
         </p>
       </header>
 
-      {resultado.analisis.length === 0 && (
-        <p className="tarjeta p-6 text-stone-600">Este lote todavía no tiene análisis registrados.</p>
-      )}
-
-      {resultado.analisis.map(({ analisis_id, vigente, versiones }) => (
-        <article key={analisis_id} className="space-y-4">
-          <BannerVerificacion analisis={vigente} laboratorio={laboratorio.id} />
-          <section className="tarjeta p-6">
-            <DatosAnalisis analisis={vigente} />
-          </section>
-          <section className="tarjeta p-6">
-            <h2 className="mb-4 font-semibold">Evidencia de integridad</h2>
-            <Evidencia analisis={vigente} />
-          </section>
-
-          {versiones.length > 1 && (
-            <section className="tarjeta p-6">
-              <h2 className="font-semibold">Historial de versiones</h2>
-              <p className="mt-1 text-sm text-stone-500">
-                Las correcciones no sobrescriben el análisis: cada versión queda registrada y enlazada a la anterior.
-              </p>
-              <ol className="mt-4 space-y-3">
-                {[...versiones].reverse().map((v) => (
-                  <li key={v.version} className="flex flex-wrap items-center gap-x-4 gap-y-1 border-l-2 border-stone-200 pl-4 text-sm">
-                    <span className="font-mono font-semibold">v{v.version}</span>
-                    <span className="font-mono">{v.pureza}%</span>
-                    <PillVerificacion estado={v.verificacion.estado} />
-                    <span className="text-stone-500">{formatoFechaHora(v.creado_en)}</span>
-                    {v.motivo_correccion && <span className="w-full text-stone-600">Motivo: {v.motivo_correccion}</span>}
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
-        </article>
-      ))}
+      <AnalisisDelLote resultado={resultado} />
+      <SeccionComercial
+        loteId={lote.id}
+        acciones={
+          <Link to={`/mercado/${lote.id}`} className="text-sm font-medium text-mineral-700 hover:underline">
+            Ver en el mercado →
+          </Link>
+        }
+      />
 
       <p className="text-xs text-stone-500">
         MinerTrace garantiza la integridad del registro digital desde su anclaje, no la exactitud de la medición física, que
