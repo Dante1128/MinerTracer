@@ -5,11 +5,13 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test test/*.test.ts"
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:testnet": "node --import tsx --test test-testnet/*.test.ts"
   },
   "type": "module",
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@stellar/stellar-sdk": "17.2.1",
     "bcryptjs": "^3.0.3",
     "canonicalize": "^5.1.0",
     "express": "^5.2.1",

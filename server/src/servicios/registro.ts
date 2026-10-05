@@ -26,9 +26,9 @@ export async function registrarLote(ctx: Contexto, usuario: Usuario, datos: Lote
   if (existe) throw new ErrorHttp(409, `El lote ${id} ya existe`);
 
   const [lote] = await ctx.db.query(
-    `INSERT INTO lotes (id, laboratorio_id, tipo_mineral, peso_kg, origen, coordenadas, creado_por)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [id, usuario.laboratorio_id, datos.tipo_mineral, datos.peso_kg, datos.origen, datos.coordenadas, usuario.id],
+    `INSERT INTO lotes (id, laboratorio_id, tipo_mineral, peso_kg, origen, coordenadas, creado_por, dueno)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [id, usuario.laboratorio_id, datos.tipo_mineral, datos.peso_kg, datos.origen, datos.coordenadas, usuario.id, datos.dueno],
   );
   return lote;
 }

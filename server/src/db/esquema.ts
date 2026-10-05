@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS lotes (
   creado_por      INT NOT NULL REFERENCES usuarios(id),
   creado_en       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Cuenta Stellar del dueño del lote (Fase 2). No forma parte del registro
+-- canónico: el contrato la usa al crear el lote y luego la actualiza al venderlo.
+ALTER TABLE lotes ADD COLUMN IF NOT EXISTS dueno TEXT;
 
 CREATE TABLE IF NOT EXISTS analisis (
   id                SERIAL PRIMARY KEY,

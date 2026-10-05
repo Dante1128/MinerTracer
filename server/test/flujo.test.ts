@@ -10,6 +10,7 @@ import type { Server } from 'node:http';
 const dirTemporal = fs.mkdtempSync(path.join(os.tmpdir(), 'minertrace-test-'));
 process.env.DATOS_DIR = dirTemporal;
 process.env.DEMO_ALTERAR = 'true';
+process.env.ANCLAJE = 'mock';
 delete process.env.DATABASE_URL;
 
 const { conectar } = await import('../src/db/index.ts');

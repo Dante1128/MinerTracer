@@ -11,14 +11,17 @@ const procesador = new ProcesadorAnclajes(db, anclaje);
 const ctx = { db, anclaje, procesador };
 
 if (await sembrar(ctx)) {
-  console.log(`[semilla] Usuarios de prueba: analista@lab001.test / supervisor@lab001.test (contraseña: ${PASSWORD_DEMO})`);
+  console.log(
+    `[semilla] Usuarios de prueba: analista@lab001.test, supervisor@lab001.test, analista@lab002.test, supervisor@lab002.test (contraseña: ${PASSWORD_DEMO})`,
+  );
 }
 procesador.iniciar();
 
 const servidor = crearApp(ctx).listen(config.puerto, () => {
   console.log(`MinerTrace API en http://localhost:${config.puerto}`);
   console.log(`  base de datos: ${db.motor === 'pglite' ? `PGlite (${config.datosDir})` : 'PostgreSQL'}`);
-  console.log(`  anclaje: ${anclaje.nombre}${config.demoAlterar ? ' | demo de alteración habilitada' : ''}`);
+  const contrato = anclaje.contratoId ? ` · contrato ${anclaje.contratoId}` : '';
+  console.log(`  anclaje: ${anclaje.nombre} (${anclaje.red}${contrato})${config.demoAlterar ? ' | demo de alteración habilitada' : ''}`);
 });
 
 async function apagar() {

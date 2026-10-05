@@ -5,7 +5,17 @@ const ESPERA_MAX_MS = 5 * 60 * 1000;
 /** Mientras dura la reserva, ningún otro procesador toma el análisis. Debe superar lo que tarda un anclaje. */
 const RESERVA_MS = 5 * 60 * 1000;
 
-type Pendiente = { id: number; hash: string; laboratorio_id: string; intentos_anclaje: number };
+type Pendiente = {
+  id: number;
+  hash: string;
+  laboratorio_id: string;
+  intentos_anclaje: number;
+  analisis_id: string;
+  version: number;
+  lote_id: string;
+  hash_anterior: string | null;
+  pureza: string;
+};
 
 /**
  * Ancla los análisis en estado `pendiente` y reintenta con espera exponencial
@@ -56,7 +66,7 @@ export class ProcesadorAnclajes {
              ORDER BY id LIMIT 50
              FOR UPDATE SKIP LOCKED
            )
-           RETURNING id, hash, laboratorio_id, intentos_anclaje`,
+           RETURNING id, hash, laboratorio_id, intentos_anclaje, analisis_id, version, lote_id, hash_anterior, pureza`,
           [String(RESERVA_MS)],
         );
         pendientes.sort((a, b) => a.id - b.id);
@@ -69,7 +79,23 @@ export class ProcesadorAnclajes {
 
   private async anclarUno(a: Pendiente) {
     try {
-      const { txId, fecha } = await this.anclaje.anclar(a.hash, a.laboratorio_id);
+      const [destino] = await this.db.query<{ cuenta_publica: string; dueno: string | null }>(
+        `SELECT lab.cuenta_publica, l.dueno FROM laboratorios lab, lotes l WHERE lab.id = $1 AND l.id = $2`,
+        [a.laboratorio_id, a.lote_id],
+      );
+      if (!destino) throw new Error(`Laboratorio ${a.laboratorio_id} o lote ${a.lote_id} inexistente`);
+      const { txId, fecha } = await this.anclaje.anclar({
+        hash: a.hash,
+        laboratorioId: a.laboratorio_id,
+        cuentaLaboratorio: destino.cuenta_publica,
+        analisisId: a.analisis_id,
+        version: a.version,
+        loteId: a.lote_id,
+        hashAnterior: a.hash_anterior,
+        pureza: a.pureza,
+        // Sin dueño indicado, el lote queda a nombre del laboratorio.
+        dueno: destino.dueno ?? destino.cuenta_publica,
+      });
       await this.db.query(
         `UPDATE analisis SET estado_anclaje = 'anclado', tx_id = $2, fecha_anclaje = $3,
            intentos_anclaje = intentos_anclaje + 1, ultimo_error = NULL, proximo_intento = NULL
@@ -78,7 +104,8 @@ export class ProcesadorAnclajes {
       );
     } catch (error) {
       const esperaMs = Math.min(ESPERA_MAX_MS, 2000 * 2 ** a.intentos_anclaje);
-      const mensaje = error instanceof Error ? error.message : String(error);
+      // Los errores de simulación traen el registro de eventos completo: basta la primera línea.
+      const mensaje = (error instanceof Error ? error.message : String(error)).split('\n')[0].slice(0, 500);
       console.warn(`[anclaje] análisis ${a.id}: ${mensaje}. Reintento en ${Math.round(esperaMs / 1000)} s`);
       await this.db.query(
         `UPDATE analisis SET intentos_anclaje = intentos_anclaje + 1, ultimo_error = $2,

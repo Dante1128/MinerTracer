@@ -7,6 +7,7 @@ import { after, before, test } from 'node:test';
 // Base de datos en memoria y archivos en un directorio temporal.
 const dirTemporal = fs.mkdtempSync(path.join(os.tmpdir(), 'minertrace-test-'));
 process.env.DATOS_DIR = dirTemporal;
+process.env.ANCLAJE = 'mock';
 delete process.env.DATABASE_URL;
 
 const { conectar } = await import('../src/db/index.ts');
@@ -35,21 +36,17 @@ let analistaOtroLab: Usuario;
 
 before(async () => {
   await sembrar(ctx, { lotesDemo: false });
-  [analista] = await db.query<Usuario>("SELECT id, email, nombre, rol, laboratorio_id FROM usuarios WHERE rol = 'analista'");
-  await db.query(
-    "INSERT INTO laboratorios (id, nombre, cuenta_publica) VALUES ('LAB-002', 'Otro laboratorio', 'GOTRO')",
-  );
-  [analistaOtroLab] = await db.query<Usuario>(
-    `INSERT INTO usuarios (email, nombre, password_hash, rol, laboratorio_id)
-     VALUES ('otro@lab002.test', 'Otro', 'x', 'analista', 'LAB-002')
-     RETURNING id, email, nombre, rol, laboratorio_id`,
-  );
+  const usuario = async (email: string) =>
+    (await db.query<Usuario>('SELECT id, email, nombre, rol, laboratorio_id FROM usuarios WHERE email = $1', [email]))[0];
+  analista = await usuario('analista@lab001.test');
+  analistaOtroLab = await usuario('analista@lab002.test');
   await registrarLote(ctx, analista, {
     codigo: 'LT-ROB-0001',
     tipo_mineral: 'Concentrado de estaño',
     peso_kg: '100.000',
     origen: 'Potosí',
     coordenadas: null,
+    dueno: null,
   });
 });
 

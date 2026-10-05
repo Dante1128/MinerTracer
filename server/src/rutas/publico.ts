@@ -10,7 +10,13 @@ export function rutasPublicas(ctx: Contexto) {
   const r = Router();
 
   r.get('/info', (_req, res) => {
-    res.json({ anclaje: ctx.anclaje.nombre, motor_db: ctx.db.motor, demo_alterar: config.demoAlterar });
+    res.json({
+      anclaje: ctx.anclaje.nombre,
+      red: ctx.anclaje.red,
+      contrato_id: ctx.anclaje.contratoId,
+      motor_db: ctx.db.motor,
+      demo_alterar: config.demoAlterar,
+    });
   });
 
   r.get('/lotes/:loteId', async (req, res) => {
