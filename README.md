@@ -113,6 +113,9 @@ Un solo contrato, en Rust con `soroban-sdk` 28, que hace dos cosas:
   4. Sin disputa, el comprador confirma (`confirm`): el vendedor cobra y el lote cambia de dueño.
      En disputa, el comprador recupera el dinero (`refund`) y el lote queda bloqueado hasta que el laboratorio
      cuyo resultado se discutió registre un análisis nuevo.
+  5. **Plazo de la garantía:** si el comprador no confirma ni hay disputa antes de que venza el plazo
+     (7 días por defecto, contados desde la compra), el vendedor puede cobrar (`claim`) y el lote pasa al
+     comprador, igual que si hubiera confirmado. En disputa no se puede cobrar: solo cabe el reembolso.
 
 El pago usa la interfaz estándar de tokens de Soroban: en testnet, el contrato del XLM nativo. Para usar otro token,
 como USDC, basta con indicar su contrato al desplegar. Los errores son un enum tipado (`Error`), cada acción emite
@@ -124,7 +127,7 @@ Requisitos: Rust con el target `wasm32v1-none` y el [Stellar CLI](https://develo
 
 ```bash
 rustup target add wasm32v1-none
-npm run contrato:test        # 12 pruebas
+npm run contrato:test        # 15 pruebas
 npm run contrato:desplegar   # cuentas de prueba + despliegue + laboratorios autorizados
 ```
 
@@ -136,8 +139,13 @@ El script:
 2. Compila el contrato y lo despliega. El constructor recibe el admin, el token y la tolerancia.
 3. Autoriza los dos laboratorios e imprime el `CONTRACT_ID`.
 
-Variables opcionales: `TOKEN_CONTRATO` (contrato del token; por defecto, el XLM nativo) y `TOLERANCIA_BPS`
-(por defecto 200, es decir 2.00 %).
+Variables opcionales: `TOKEN_CONTRATO` (contrato del token; por defecto, el XLM nativo), `TOLERANCIA_BPS`
+(por defecto 200, es decir 2.00 %) y `PLAZO_GARANTIA_DIAS` (por defecto 7) o `PLAZO_GARANTIA_SEG` (en segundos;
+por ejemplo 20 para probar el cobro por vencimiento con `test-testnet/garantia.testnet.test.ts`, que con un plazo
+largo se omite).
+
+El contrato no se puede modificar una vez desplegado: si cambia su código, vuelva a desplegarlo y actualice
+`STELLAR_CONTRATO_ID` (y empiece con una base de datos nueva).
 
 Testnet se reinicia periódicamente y borra cuentas y contratos. Si pasa, vuelva a ejecutar el script:
 refondea las mismas identidades y despliega un contrato nuevo.
@@ -230,3 +238,12 @@ conéctela en el portal. `FIRMA_LABORATORIO=servidor` conserva el modo anterior 
 ## Pendiente
 
 - **Retirar una publicación:** el contrato no tiene `unlist_batch`; un lote publicado sin comprador no se puede retirar.
+- **Firma con passkeys para el técnico de laboratorio (evaluado, no implementado).** El camino vigente es el
+  [Smart Account Kit](https://github.com/stellar/smart-account-kit) (SDK oficial sobre las cuentas inteligentes de
+  OpenZeppelin, con verificación WebAuthn/secp256r1 en la cadena desde el protocolo 21). Implica:
+  la cuenta del laboratorio pasa a ser un contrato (dirección `C…`) con una passkey por técnico;
+  desplegar el contrato de cuenta y el verificador WebAuthn en testnet; autorizar esa dirección `C…` con `add_lab`;
+  que el servidor (o un relayer) pague las comisiones, porque una cuenta contrato no puede ser origen de la
+  transacción (la passkey firma la entrada de autorización, no el sobre); y cargar el SDK de Stellar en la web.
+  El contrato MinerTrace no cambia: `require_auth` acepta cuentas contrato. El kit no está auditado y pide
+  `@stellar/stellar-sdk` ^16.3 (el servidor usa la 17). Estimación: 3 a 5 días de trabajo, más pruebas en dispositivos.

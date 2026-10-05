@@ -76,6 +76,8 @@ Antes de dar un cambio por terminado, ejecute `npm run typecheck` y `npm test`
   `counter_analysis` con Freighter; el servidor arma la transacción, la envía y marca `anclado` solo tras leer
   el contrato. El procesador solo reconcilia esos análisis (`buscarAnclaje`); firma únicamente los que tienen
   `firma_servidor` (semilla y pruebas). No reintroduzca la firma en el servidor para el portal.
+- Garantía con plazo: `buy` fija `vence_garantia`; vencido el plazo sin confirmación ni disputa, el vendedor
+  cobra con `claim`. Cambiar el contrato exige volver a desplegarlo (no tiene función de actualización).
 - `npm run test:testnet` corre con `--test-concurrency=1`: dos pruebas firmando con la misma cuenta a la vez
   chocan en el número de secuencia de Stellar.
 - El endpoint `/api/demo` (simular fraude) solo existe con `DEMO_ALTERAR=true` y nunca en producción.
