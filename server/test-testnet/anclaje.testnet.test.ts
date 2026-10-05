@@ -14,6 +14,8 @@ import { after, test } from 'node:test';
 const dirTemporal = fs.mkdtempSync(path.join(os.tmpdir(), 'minertrace-testnet-'));
 process.env.DATOS_DIR = dirTemporal;
 process.env.ANCLAJE = 'stellar';
+// Estas pruebas firman en el servidor; la firma con wallet se prueba en firma-wallet.testnet.test.ts.
+process.env.FIRMA_LABORATORIO = 'servidor';
 delete process.env.DATABASE_URL;
 
 const { config } = await import('../src/config.ts');

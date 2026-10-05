@@ -15,7 +15,7 @@ export function crearServicioAnclaje(db: Db): ServicioAnclaje {
       if (!config.stellar.contratoId) {
         throw new Error('ANCLAJE=stellar requiere STELLAR_CONTRATO_ID (npm run contrato:desplegar)');
       }
-      return new AnclajeStellar(config.stellar);
+      return new AnclajeStellar({ ...config.stellar, firmaConWallet: config.stellar.firmaLaboratorio === 'wallet' });
     default:
       throw new Error(`Proveedor de anclaje desconocido: ${config.anclaje.proveedor}`);
   }

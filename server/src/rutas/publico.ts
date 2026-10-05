@@ -15,6 +15,8 @@ export function rutasPublicas(ctx: Contexto) {
       anclaje: ctx.anclaje.nombre,
       red: ctx.anclaje.red,
       contrato_id: ctx.anclaje.contratoId,
+      // "wallet": cada laboratorio firma sus análisis con Freighter.
+      firma_laboratorio: ctx.anclaje.firmaConWallet ? 'wallet' : 'servidor',
       motor_db: ctx.db.motor,
       demo_alterar: config.demoAlterar,
     });

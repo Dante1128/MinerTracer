@@ -22,6 +22,8 @@ export class AnclajeMock implements ServicioAnclaje {
   readonly nombre = 'mock';
   readonly red = 'simulada';
   readonly contratoId = null;
+  // La simulación no tiene wallets: siempre firma el servidor.
+  readonly firmaConWallet = false;
   private db: Db;
   private retrasoMs: number;
   private tasaFallo: number;
@@ -51,6 +53,22 @@ export class AnclajeMock implements ServicioAnclaje {
       [txId, hash, lab.cuenta_publica, fecha],
     );
     return { txId, fecha };
+  }
+
+  async buscarAnclaje({ hash }: SolicitudAnclaje): Promise<ResultadoAnclaje | null> {
+    const [fila] = await this.db.query<{ tx_id: string; fecha: string }>(
+      'SELECT tx_id, fecha FROM anclajes_mock WHERE hash = $1 LIMIT 1',
+      [hash],
+    );
+    return fila ? { txId: fila.tx_id, fecha: fila.fecha } : null;
+  }
+
+  async prepararAnclaje(): Promise<string> {
+    throw new Error('El anclaje simulado no usa wallets');
+  }
+
+  async enviarAnclaje(): Promise<ResultadoAnclaje> {
+    throw new Error('El anclaje simulado no usa wallets');
   }
 
   async consultarAnclaje({ txId }: ReferenciaAnclaje): Promise<AnclajeConsultado> {

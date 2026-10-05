@@ -18,7 +18,20 @@ export interface ServicioAnclaje {
   readonly red: string;
   /** Contrato Soroban donde se registran los análisis (null si es simulado). */
   readonly contratoId: string | null;
+  /**
+   * Los laboratorios firman con su propia wallet (Freighter). El procesador
+   * entonces no firma: solo reconcilia lo que ya está en la red, salvo los
+   * análisis marcados con `firma_servidor` (semilla y pruebas).
+   */
+  readonly firmaConWallet: boolean;
+  /** Firma en el servidor y ancla (mock, semilla, pruebas o FIRMA_LABORATORIO=servidor). */
   anclar(solicitud: SolicitudAnclaje): Promise<ResultadoAnclaje>;
+  /** Busca en la red un anclaje ya hecho de esta solicitud; null si aún no existe. */
+  buscarAnclaje(solicitud: SolicitudAnclaje): Promise<ResultadoAnclaje | null>;
+  /** Transacción sin firmar para la wallet del laboratorio. */
+  prepararAnclaje(solicitud: SolicitudAnclaje): Promise<string>;
+  /** Envía la transacción firmada por la wallet; solo devuelve el anclaje si el contrato tiene exactamente este registro. */
+  enviarAnclaje(solicitud: SolicitudAnclaje, xdrFirmado: string): Promise<ResultadoAnclaje>;
   consultarAnclaje(referencia: ReferenciaAnclaje): Promise<AnclajeConsultado>;
   /** URL pública para comprobar la transacción por cuenta propia (null si no existe). */
   urlExplorador(txId: string): string | null;

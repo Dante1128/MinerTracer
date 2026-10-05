@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { Keypair } from '@stellar/stellar-sdk';
+import { Keypair, StrKey } from '@stellar/stellar-sdk';
 import { variableSecreto } from './anclaje/AnclajeStellar.ts';
 import { config } from './config.ts';
 import type { Contexto, Usuario } from './contexto.ts';
@@ -29,15 +29,21 @@ const LABORATORIOS = [
 ] as const;
 
 /**
- * Cuenta Stellar de un laboratorio: la de su clave en STELLAR_SECRETO_<ID>.
- * Sin clave (solo en modo mock) se deriva del ID una dirección válida que no
- * existe en la red.
+ * Cuenta Stellar de un laboratorio: la de su clave en STELLAR_SECRETO_<ID> o,
+ * si firma con su wallet, la indicada en STELLAR_CUENTA_<ID>. Sin ninguna (solo
+ * en modo mock) se deriva del ID una dirección válida que no existe en la red.
  */
 export function cuentaLaboratorio(laboratorioId: string): string {
   const secreto = config.stellar.secretos[laboratorioId];
   if (secreto) return Keypair.fromSecret(secreto).publicKey();
+  const cuenta = config.stellar.cuentas[laboratorioId];
+  if (cuenta) {
+    if (!StrKey.isValidEd25519PublicKey(cuenta)) throw new Error(`La cuenta de ${laboratorioId} no es una dirección Stellar válida`);
+    return cuenta;
+  }
   if (config.anclaje.proveedor === 'stellar') {
-    throw new Error(`Falta ${variableSecreto(laboratorioId)} para crear el laboratorio ${laboratorioId}`);
+    const variable = variableSecreto(laboratorioId).replace('SECRETO', 'CUENTA');
+    throw new Error(`Falta ${variable} (o ${variableSecreto(laboratorioId)}) para crear el laboratorio ${laboratorioId}`);
   }
   const semilla = crypto.createHash('sha256').update(`minertrace-mock:${laboratorioId}`).digest();
   return Keypair.fromRawEd25519Seed(semilla).publicKey();
@@ -77,6 +83,8 @@ export async function sembrar(ctx: Contexto, opciones: { lotesDemo?: boolean } =
       dueno: config.stellar.duenoDemo,
     });
     const composicion = { Sn: '75.00', Pb: '4.10', Ag: '0.80', otros: '20.10' };
+    // La semilla la firma el servidor si tiene la clave del laboratorio; si no, espera su wallet.
+    const firmaServidor = Boolean(config.stellar.secretos['LAB-001']);
     await registrarAnalisis(
       ctx,
       analista,
@@ -92,6 +100,7 @@ export async function sembrar(ctx: Contexto, opciones: { lotesDemo?: boolean } =
           'Analista: Ana Quispe',
         ]),
       },
+      { firmaServidor },
     );
   }
   return true;

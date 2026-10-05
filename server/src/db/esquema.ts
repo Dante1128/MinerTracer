@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS analisis (
   ultimo_error      TEXT,
   UNIQUE (analisis_id, version)
 );
+-- Con firma por wallet, el servidor solo ancla lo que él mismo debe firmar (semilla y pruebas).
+ALTER TABLE analisis ADD COLUMN IF NOT EXISTS firma_servidor BOOLEAN NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS analisis_lote_idx ON analisis (lote_id);
 CREATE INDEX IF NOT EXISTS analisis_pendientes_idx ON analisis (estado_anclaje) WHERE estado_anclaje = 'pendiente';
 

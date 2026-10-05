@@ -1,4 +1,5 @@
 import { contract, Keypair, nativeToScVal, Networks, rpc, scValToNative } from '@stellar/stellar-sdk';
+import { ContratoSoroban } from '../stellar/contrato.ts';
 import {
   ANALISIS_INEXISTENTE,
   codigoErrorContrato,
@@ -55,8 +56,10 @@ interface MetodosContrato {
 export interface OpcionesStellar {
   rpcUrl: string;
   contratoId: string;
-  /** Clave secreta de cada laboratorio, por ID (LAB-001 → S...). */
+  /** Clave secreta de cada laboratorio, por ID (LAB-001 → S...): semilla, pruebas o firma en el servidor. */
   secretos: Record<string, string>;
+  /** Los laboratorios firman sus análisis con su wallet (FIRMA_LABORATORIO=wallet). */
+  firmaConWallet: boolean;
 }
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex');
@@ -72,28 +75,46 @@ export function aPuntosBasicos(pureza: string): number {
 /** Nombre de la variable de entorno con la clave de un laboratorio: LAB-001 → STELLAR_SECRETO_LAB_001. */
 export const variableSecreto = (laboratorioId: string) => `STELLAR_SECRETO_${laboratorioId.replace(/-/g, '_')}`;
 
+/** Argumentos de `submit_analysis` para una solicitud. */
+function argumentos(s: SolicitudAnclaje) {
+  return {
+    lab: s.cuentaLaboratorio,
+    lote_id: s.loteId,
+    dueno: s.dueno,
+    analisis_id: s.analisisId,
+    version: s.version,
+    hash: Buffer.from(s.hash, 'hex'),
+    hash_anterior: s.hashAnterior ? Buffer.from(s.hashAnterior, 'hex') : undefined,
+    pureza_bps: aPuntosBasicos(s.pureza),
+  };
+}
+
 /**
  * Ancla los análisis en el contrato MinerTrace de Soroban (testnet) y los
  * verifica leyendo el estado del contrato, nunca la base de datos.
  *
- * TEMPORAL (hasta la etapa 4): el servidor firma `submit_analysis` con la clave
- * secreta de cada laboratorio, leída de STELLAR_SECRETO_<ID>. En la etapa 4 el
- * laboratorio firmará desde su propia wallet y esta firma en el servidor
- * quedará solo para la semilla y las pruebas.
+ * Normalmente el laboratorio firma `submit_analysis` con su propia wallet:
+ * `prepararAnclaje` arma la transacción sin firmar y `enviarAnclaje` la envía y
+ * comprueba el registro en el contrato. La firma en el servidor (`anclar`, con
+ * STELLAR_SECRETO_<ID>) queda para la semilla, las pruebas y FIRMA_LABORATORIO=servidor.
  */
 export class AnclajeStellar implements ServicioAnclaje {
   readonly nombre = 'stellar';
   readonly red = 'testnet';
   readonly contratoId: string;
+  readonly firmaConWallet: boolean;
   private opciones: OpcionesStellar;
   private servidor: rpc.Server;
+  private contrato: ContratoSoroban;
   private spec: Promise<contract.Spec> | null = null;
   private clientes = new Map<string, MetodosContrato>();
 
   constructor(opciones: OpcionesStellar) {
     this.opciones = opciones;
     this.contratoId = opciones.contratoId;
+    this.firmaConWallet = opciones.firmaConWallet;
     this.servidor = new rpc.Server(opciones.rpcUrl);
+    this.contrato = new ContratoSoroban(opciones.rpcUrl, opciones.contratoId);
   }
 
   async anclar(s: SolicitudAnclaje): Promise<ResultadoAnclaje> {
@@ -102,16 +123,7 @@ export class AnclajeStellar implements ServicioAnclaje {
       throw new Error(`La clave de ${variableSecreto(s.laboratorioId)} no corresponde a la cuenta registrada del laboratorio`);
     }
     const cliente = await this.cliente(s.laboratorioId);
-    const tx = await cliente.submit_analysis({
-      lab: s.cuentaLaboratorio,
-      lote_id: s.loteId,
-      dueno: s.dueno,
-      analisis_id: s.analisisId,
-      version: s.version,
-      hash: Buffer.from(s.hash, 'hex'),
-      hash_anterior: s.hashAnterior ? Buffer.from(s.hashAnterior, 'hex') : undefined,
-      pureza_bps: aPuntosBasicos(s.pureza),
-    });
+    const tx = await cliente.submit_analysis(argumentos(s));
 
     const codigo = this.codigoDeSimulacion(tx);
     if (codigo === VERSION_DUPLICADA) return this.recuperarAnclaje(s);
@@ -130,6 +142,20 @@ export class AnclajeStellar implements ServicioAnclaje {
       throw new Error(`La transacción no se confirmó en la red (${respuesta?.status ?? 'sin respuesta'})`);
     }
     return { txId, fecha: isoDesdeSegundos(respuesta.createdAt) };
+  }
+
+  prepararAnclaje(s: SolicitudAnclaje): Promise<string> {
+    return this.contrato.prepararTransaccion('submit_analysis', argumentos(s), s.cuentaLaboratorio);
+  }
+
+  async enviarAnclaje(s: SolicitudAnclaje, xdrFirmado: string): Promise<ResultadoAnclaje> {
+    const enviada = await this.contrato.enviarFirmada(xdrFirmado, { funcion: 'submit_analysis', cuenta: s.cuentaLaboratorio });
+    // Se marca anclado solo si el contrato guarda exactamente este registro.
+    const anclado = await this.leerAnalisis(s.analisisId, s.version);
+    if (!anclado || hex(anclado.hash) !== s.hash || anclado.lab !== s.cuentaLaboratorio) {
+      throw new Error('La transacción se confirmó, pero el contrato no tiene este análisis con el mismo hash');
+    }
+    return { txId: enviada.txId, fecha: enviada.fecha };
   }
 
   async consultarAnclaje(ref: ReferenciaAnclaje): Promise<AnclajeConsultado> {
@@ -159,14 +185,22 @@ export class AnclajeStellar implements ServicioAnclaje {
     throw codigo !== null ? new ErrorContrato(codigo) : new Error('No se pudo leer el análisis del contrato');
   }
 
-  /**
-   * La versión ya está en el contrato. Si es exactamente la nuestra (el proceso
-   * se cayó después de enviar la transacción y antes de guardar el resultado),
-   * se busca el ID de esa transacción en los eventos del contrato.
-   */
+  /** La versión ya estaba en el contrato (p. ej., el proceso se cayó tras enviarla): se recupera su transacción. */
   private async recuperarAnclaje(s: SolicitudAnclaje): Promise<ResultadoAnclaje> {
+    const encontrado = await this.buscarAnclaje(s);
+    if (!encontrado) throw new Error('El contrato indicó que la versión ya existe, pero no se pudo leer');
+    return encontrado;
+  }
+
+  /**
+   * Si el contrato ya tiene esta versión, comprueba que sea exactamente la
+   * nuestra y busca el ID de la transacción en los eventos del contrato.
+   * Sirve para reconciliar análisis firmados con la wallet del laboratorio.
+   */
+  async buscarAnclaje(s: SolicitudAnclaje): Promise<ResultadoAnclaje | null> {
     const anclado = await this.leerAnalisis(s.analisisId, s.version);
-    if (!anclado || hex(anclado.hash) !== s.hash || anclado.lab !== s.cuentaLaboratorio) {
+    if (!anclado) return null;
+    if (hex(anclado.hash) !== s.hash || anclado.lab !== s.cuentaLaboratorio) {
       throw new Error(
         `El contrato ya tiene otra versión ${s.analisisId} v${s.version}. ` +
           'Si se reinició la base de datos, despliegue un contrato nuevo (npm run contrato:desplegar).',

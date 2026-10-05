@@ -40,7 +40,7 @@ export function errorDeContrato(texto: unknown): Error | null {
 /**
  * Acceso genérico a un contrato Soroban de testnet: lecturas (simulación),
  * transacciones sin firmar para que las firme una wallet, firma en el
- * servidor (solo semilla y laboratorios, temporal) y envío de transacciones firmadas.
+ * servidor (semilla, pruebas y FIRMA_LABORATORIO=servidor) y envío de transacciones firmadas.
  */
 export class ContratoSoroban {
   readonly contratoId: string;
@@ -78,7 +78,7 @@ export class ContratoSoroban {
     return tx.toXDR();
   }
 
-  /** Firma en el servidor y envía (temporal: solo para laboratorios y semilla). */
+  /** Firma en el servidor y envía: solo semilla, pruebas y FIRMA_LABORATORIO=servidor. */
   async firmarYEnviar(metodo: string, args: Record<string, unknown>, par: Keypair) {
     const tx = await this.llamar(metodo, args, {
       publicKey: par.publicKey(),

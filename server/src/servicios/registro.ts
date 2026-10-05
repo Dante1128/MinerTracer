@@ -39,11 +39,17 @@ export async function prepararPdf(pdf: PdfSubido) {
   return { sha256, nombre: pdf.nombre.slice(0, 200) || 'informe.pdf' };
 }
 
+/** `firmaServidor`: el servidor firma el anclaje aunque los laboratorios firmen con su wallet (semilla, pruebas). */
+export interface OpcionesRegistro {
+  firmaServidor?: boolean;
+}
+
 async function insertarAnalisis(
   ctx: Contexto,
   usuario: Usuario,
   datos: Omit<DatosAnalisis, 'salt' | 'version_esquema' | 'laboratorio_id'>,
   pdfNombre: string,
+  opciones: OpcionesRegistro,
 ) {
   const [lote] = await ctx.db.query('SELECT * FROM lotes WHERE id = $1', [datos.lote_id]);
   if (!lote) throw new ErrorHttp(404, `Lote ${datos.lote_id} no encontrado`);
@@ -62,14 +68,14 @@ async function insertarAnalisis(
   const [fila] = await ctx.db.query(
     `INSERT INTO analisis (analisis_id, version, lote_id, laboratorio_id, analista_id, fecha_analisis,
        metodo, pureza, composicion, observaciones, pdf_sha256, salt, version_esquema, hash_anterior,
-       motivo_correccion, hash, pdf_nombre)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       motivo_correccion, hash, pdf_nombre, firma_servidor)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
      RETURNING *`,
     [
       completo.analisis_id, completo.version, completo.lote_id, completo.laboratorio_id, usuario.id,
       completo.fecha_analisis, completo.metodo, completo.pureza, JSON.stringify(completo.composicion),
       completo.observaciones, completo.pdf_sha256, completo.salt, completo.version_esquema,
-      completo.hash_anterior, completo.motivo_correccion, hash, pdfNombre,
+      completo.hash_anterior, completo.motivo_correccion, hash, pdfNombre, opciones.firmaServidor === true,
     ],
   );
   // El anclaje es asíncrono: el registro ya está a salvo en la base de datos.
@@ -83,6 +89,7 @@ export async function registrarAnalisis(
   loteId: string,
   datos: AnalisisValidado,
   pdf: PdfSubido | null,
+  opciones: OpcionesRegistro = {},
 ) {
   if (!pdf) throw new ErrorHttp(400, 'Adjunte el informe PDF');
   // Se comprueba antes de guardar el PDF y de consumir la secuencia, para no dejar huérfanos ni saltos.
@@ -105,6 +112,7 @@ export async function registrarAnalisis(
       pdf_sha256: archivo.sha256,
     },
     archivo.nombre,
+    opciones,
   );
 }
 
@@ -116,6 +124,7 @@ export async function registrarCorreccion(
   datos: AnalisisValidado,
   motivo: string,
   pdf: PdfSubido | null,
+  opciones: OpcionesRegistro = {},
 ) {
   if (usuario.rol !== 'supervisor') throw new ErrorHttp(403, 'Solo un supervisor puede registrar correcciones');
   const [anterior] = await ctx.db.query(
@@ -142,6 +151,7 @@ export async function registrarCorreccion(
         pdf_sha256: archivo.sha256,
       },
       archivo.nombre,
+      opciones,
     );
   } catch (error) {
     if (String((error as Error).message).includes('duplicate key')) {

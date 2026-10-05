@@ -48,10 +48,14 @@ function anclajeDePrueba(cambios: Partial<ServicioAnclaje> & { enviadas?: Solici
     nombre: mock.nombre,
     red: mock.red,
     contratoId: mock.contratoId,
+    firmaConWallet: cambios.firmaConWallet ?? false,
     anclar: async (s) => {
       cambios.enviadas?.push(s);
       return (cambios.anclar ?? mock.anclar.bind(mock))(s);
     },
+    buscarAnclaje: cambios.buscarAnclaje ?? mock.buscarAnclaje.bind(mock),
+    prepararAnclaje: cambios.prepararAnclaje ?? mock.prepararAnclaje.bind(mock),
+    enviarAnclaje: cambios.enviarAnclaje ?? mock.enviarAnclaje.bind(mock),
     consultarAnclaje: cambios.consultarAnclaje ?? mock.consultarAnclaje.bind(mock),
     urlExplorador: () => null,
   };

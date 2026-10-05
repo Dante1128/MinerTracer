@@ -184,6 +184,7 @@ export function publico(fila: any) {
     hash_anterior: fila.hash_anterior,
     motivo_correccion: fila.motivo_correccion,
     estado_anclaje: fila.estado_anclaje,
+    firma_servidor: fila.firma_servidor,
     tx_id: fila.tx_id,
     fecha_anclaje: fila.fecha_anclaje,
     creado_en: fila.creado_en,
