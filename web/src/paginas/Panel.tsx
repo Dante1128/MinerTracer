@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { api, type Analisis, type Lote } from '../api.ts';
+import { api, ErrorApi, type Analisis, type Lote } from '../api.ts';
 import { EstadoAnclaje } from '../componentes/Insignias.tsx';
 import { formatoFechaHora, formatoPeso } from '../formato.ts';
 import { useSesion } from '../sesion.tsx';
@@ -10,23 +10,30 @@ export function Panel() {
   const [analisis, setAnalisis] = useState<Analisis[] | null>(null);
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [pestana, setPestana] = useState<'analisis' | 'lotes'>('analisis');
+  const [error, setError] = useState<string | null>(null);
+  const [recarga, setRecarga] = useState(0);
 
   useEffect(() => {
     let vigente = true;
     let temporizador: ReturnType<typeof setTimeout>;
     const cargar = async () => {
-      const [a, l] = await Promise.all([api<Analisis[]>('/analisis'), api<Lote[]>('/lotes')]);
-      if (!vigente) return;
-      setAnalisis(a);
-      setLotes(l);
-      if (a.some((x) => x.estado_anclaje === 'pendiente')) temporizador = setTimeout(cargar, 3000);
+      try {
+        const [a, l] = await Promise.all([api<Analisis[]>('/analisis'), api<Lote[]>('/lotes')]);
+        if (!vigente) return;
+        setAnalisis(a);
+        setLotes(l);
+        setError(null);
+        if (a.some((x) => x.estado_anclaje === 'pendiente')) temporizador = setTimeout(cargar, 3000);
+      } catch (e) {
+        if (vigente) setError(e instanceof ErrorApi ? e.message : 'Error inesperado al cargar el panel');
+      }
     };
-    cargar().catch(() => {});
+    void cargar();
     return () => {
       vigente = false;
       clearTimeout(temporizador);
     };
-  }, []);
+  }, [recarga]);
 
   const pendientes = analisis?.filter((a) => a.estado_anclaje === 'pendiente').length ?? 0;
 
@@ -43,6 +50,15 @@ export function Panel() {
           + Registrar análisis
         </Link>
       </div>
+
+      {error && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">
+          <p className="font-medium">No se pudo cargar el panel: {error}</p>
+          <button className="boton-secundario" onClick={() => setRecarga((n) => n + 1)}>
+            Reintentar
+          </button>
+        </div>
+      )}
 
       <div className="mt-6 grid grid-cols-3 gap-3">
         <Stat etiqueta="Análisis" valor={analisis?.length ?? '—'} />
@@ -67,7 +83,7 @@ export function Panel() {
       {pestana === 'analisis' ? (
         <div className="tarjeta mt-4 overflow-x-auto">
           {analisis === null ? (
-            <p className="p-6 text-stone-500">Cargando…</p>
+            <p className="p-6 text-stone-500">{error ? 'Sin datos.' : 'Cargando…'}</p>
           ) : analisis.length === 0 ? (
             <p className="p-6 text-stone-500">Aún no hay análisis. Registre el primero.</p>
           ) : (

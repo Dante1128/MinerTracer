@@ -85,8 +85,10 @@ export async function registrarAnalisis(
   pdf: PdfSubido | null,
 ) {
   if (!pdf) throw new ErrorHttp(400, 'Adjunte el informe PDF');
-  const [lote] = await ctx.db.query('SELECT 1 FROM lotes WHERE id = $1', [loteId]);
+  // Se comprueba antes de guardar el PDF y de consumir la secuencia, para no dejar huérfanos ni saltos.
+  const [lote] = await ctx.db.query('SELECT laboratorio_id FROM lotes WHERE id = $1', [loteId]);
   if (!lote) throw new ErrorHttp(404, `Lote ${loteId} no encontrado`);
+  if (lote.laboratorio_id !== usuario.laboratorio_id) throw new ErrorHttp(403, 'El lote pertenece a otro laboratorio');
 
   const archivo = await prepararPdf(pdf);
   const [{ n }] = await ctx.db.query<{ n: number }>("SELECT nextval('seq_analisis') AS n");
@@ -121,6 +123,9 @@ export async function registrarCorreccion(
     [analisisId],
   );
   if (!anterior) throw new ErrorHttp(404, `Análisis ${analisisId} no encontrado`);
+  if (anterior.laboratorio_id !== usuario.laboratorio_id) {
+    throw new ErrorHttp(403, 'El análisis pertenece a otro laboratorio');
+  }
 
   const archivo = pdf ? await prepararPdf(pdf) : { sha256: anterior.pdf_sha256, nombre: anterior.pdf_nombre };
   try {

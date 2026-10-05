@@ -2,11 +2,20 @@ import type { Db } from '../db/index.ts';
 import type { ServicioAnclaje } from './ServicioAnclaje.ts';
 
 const ESPERA_MAX_MS = 5 * 60 * 1000;
+/** Mientras dura la reserva, ningún otro procesador toma el análisis. Debe superar lo que tarda un anclaje. */
+const RESERVA_MS = 5 * 60 * 1000;
+
+type Pendiente = { id: number; hash: string; laboratorio_id: string; intentos_anclaje: number };
 
 /**
  * Ancla los análisis en estado `pendiente` y reintenta con espera exponencial
  * si la red falla. El análisis ya está en la base de datos, así que nunca se
- * pierde. En Fase 2 puede sustituirse por una cola (Redis + BullMQ).
+ * pierde.
+ *
+ * Varias instancias pueden correr a la vez: cada una reserva sus filas con un
+ * UPDATE atómico (FOR UPDATE SKIP LOCKED) que adelanta `proximo_intento`, así
+ * que un análisis no se ancla dos veces. Si el proceso muere a mitad, la
+ * reserva vence y otro lo reintenta.
  */
 export class ProcesadorAnclajes {
   private db: Db;
@@ -39,11 +48,18 @@ export class ProcesadorAnclajes {
     try {
       do {
         this.repetir = false;
-        const pendientes = await this.db.query<{ id: number; hash: string; laboratorio_id: string; intentos_anclaje: number }>(
-          `SELECT id, hash, laboratorio_id, intentos_anclaje FROM analisis
-           WHERE estado_anclaje = 'pendiente' AND (proximo_intento IS NULL OR proximo_intento <= now())
-           ORDER BY id LIMIT 50`,
+        const pendientes = await this.db.query<Pendiente>(
+          `UPDATE analisis SET proximo_intento = now() + ($1 || ' milliseconds')::interval
+           WHERE id IN (
+             SELECT id FROM analisis
+             WHERE estado_anclaje = 'pendiente' AND (proximo_intento IS NULL OR proximo_intento <= now())
+             ORDER BY id LIMIT 50
+             FOR UPDATE SKIP LOCKED
+           )
+           RETURNING id, hash, laboratorio_id, intentos_anclaje`,
+          [String(RESERVA_MS)],
         );
+        pendientes.sort((a, b) => a.id - b.id);
         for (const a of pendientes) await this.anclarUno(a);
       } while (this.repetir);
     } finally {
@@ -51,7 +67,7 @@ export class ProcesadorAnclajes {
     }
   }
 
-  private async anclarUno(a: { id: number; hash: string; laboratorio_id: string; intentos_anclaje: number }) {
+  private async anclarUno(a: Pendiente) {
     try {
       const { txId, fecha } = await this.anclaje.anclar(a.hash, a.laboratorio_id);
       await this.db.query(
