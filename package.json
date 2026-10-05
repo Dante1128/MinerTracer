@@ -9,6 +9,9 @@
     "build": "npm run build --prefix web",
     "start": "npm run start --prefix server",
     "test": "npm test --prefix server",
-    "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix web"
+    "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix web",
+    "contrato:test": "cargo test --manifest-path contracts/minertrace/Cargo.toml",
+    "contrato:build": "stellar contract build --manifest-path contracts/minertrace/Cargo.toml",
+    "contrato:desplegar": "node scripts/desplegar-testnet.mjs"
   }
 }

@@ -64,6 +64,8 @@ server/src/
 web/src/
   paginas/                   Inicio, Verificar, ResultadoLote, Login, Panel, NuevoAnalisis, DetalleAnalisis
   componentes/               formulario de análisis, escáner QR, verificación, insignias
+contracts/minertrace/        contrato Soroban (Rust): laboratorios, análisis versionados, marketplace con garantía
+scripts/desplegar-testnet.mjs  cuentas de prueba + despliegue del contrato en testnet
 ```
 
 ## Decisiones de diseño
@@ -82,12 +84,59 @@ web/src/
 ## Pruebas
 
 ```bash
-npm test          # unitarias (canonicalización, validación) + flujo completo con PGlite en memoria
+npm test               # unitarias (canonicalización, validación) + flujo completo con PGlite en memoria
 npm run typecheck
+npm run contrato:test  # pruebas del contrato Soroban (cargo test)
 ```
 
-## Pendiente: Fase 2 (Web3)
+## Fase 2: contrato Soroban (`contracts/minertrace`)
 
-Busque `TODO WEB3` en el código. Resumen: implementar `AnclajeStellar` (MEMO_HASH en Testnet),
-registrarlo en `server/src/anclaje/index.ts` con `ANCLAJE=stellar`, devolver la URL del explorador en `urlExplorador`,
-guardar las claves de forma segura y re-anclar o marcar como prueba los anclajes simulados.
+Un solo contrato, en Rust con `soroban-sdk` 28, que hace dos cosas:
+
+- **Registro de análisis.** El administrador autoriza o revoca laboratorios (`add_lab`, `revoke_lab`, `is_lab`).
+  Un laboratorio activo registra cada versión de un análisis con `submit_analysis`: el hash SHA-256 que calcula
+  `server/src/integridad/canonico.ts`, el `hash_anterior` y la pureza en puntos básicos (92.50 % = 9250).
+  Las versiones nunca se sobrescriben: la versión N+1 debe apuntar al hash de la N y venir del mismo laboratorio.
+  La versión 1 crea el lote con su dueño.
+- **Marketplace con garantía.** Estados del lote: `Certificado → EnVenta → EnGarantia → Vendido`, o `EnDisputa`.
+  1. El dueño publica el lote con un precio (`list_batch`).
+  2. El comprador paga al contrato, que retiene el dinero (`buy`).
+  3. Un laboratorio distinto del que certificó el lote puede registrar un contra-análisis (`counter_analysis`).
+     Si la pureza difiere más que la tolerancia, el lote pasa a `EnDisputa`.
+  4. Sin disputa, el comprador confirma (`confirm`): el vendedor cobra y el lote cambia de dueño.
+     En disputa, el comprador recupera el dinero (`refund`) y el lote queda bloqueado hasta que el laboratorio
+     cuyo resultado se discutió registre un análisis nuevo.
+
+El pago usa la interfaz estándar de tokens de Soroban: en testnet, el contrato del XLM nativo. Para usar otro token,
+como USDC, basta con indicar su contrato al desplegar. Los errores son un enum tipado (`Error`), cada acción emite
+un evento y cada escritura extiende el TTL del almacenamiento persistente.
+
+### Desplegar en testnet
+
+Requisitos: Rust con el target `wasm32v1-none` y el [Stellar CLI](https://developers.stellar.org/docs/tools/cli/install-cli).
+
+```bash
+rustup target add wasm32v1-none
+npm run contrato:test        # 12 pruebas
+npm run contrato:desplegar   # cuentas de prueba + despliegue + laboratorios autorizados
+```
+
+El script:
+
+1. Crea con friendbot, o reutiliza, cinco identidades del CLI: `minertrace-admin`, `minertrace-lab-a`,
+   `minertrace-lab-b`, `minertrace-vendedor` y `minertrace-comprador`. Sus claves quedan en la configuración
+   global del CLI (`~/.config/stellar`), no en el repositorio. Para ver una: `stellar keys secret <nombre>`.
+2. Compila el contrato y lo despliega. El constructor recibe el admin, el token y la tolerancia.
+3. Autoriza los dos laboratorios e imprime el `CONTRACT_ID`.
+
+Variables opcionales: `TOKEN_CONTRATO` (contrato del token; por defecto, el XLM nativo) y `TOLERANCIA_BPS`
+(por defecto 200, es decir 2.00 %).
+
+Testnet se reinicia periódicamente y borra cuentas y contratos. Si pasa, vuelva a ejecutar el script:
+refondea las mismas identidades y despliega un contrato nuevo.
+
+## Pendiente
+
+- **Etapa 2:** `AnclajeStellar` (`ANCLAJE=stellar`) que registre los análisis en el contrato y verifique contra él.
+- **Etapa 3:** marketplace en el frontend con Freighter.
+- **Etapa 4:** firma del laboratorio con su propia wallet.

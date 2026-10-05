@@ -18,6 +18,8 @@ Dos paquetes independientes, cada uno con su `package.json` y `node_modules`:
 - `web/` — frontend: React 19, Vite, Tailwind 4, React Router, PWA.
 - `package.json` raíz — solo scripts que delegan en `server/` y `web/`.
 - `scripts/dev.mjs` — lanza ambos en paralelo.
+- `contracts/minertrace/` — contrato Soroban (Rust, `soroban-sdk` 28): laboratorios, análisis versionados
+  y marketplace con garantía. `scripts/desplegar-testnet.mjs` lo despliega en testnet.
 
 En desarrollo Vite (puerto 5173) redirige `/api` a la API en el puerto 3000. En producción la API sirve `web/dist`.
 
@@ -29,9 +31,12 @@ npm run dev          # API :3000 + web :5173
 npm test             # pruebas del servidor (node:test + PGlite en memoria)
 npm run typecheck    # tsc en server/ y web/
 npm run build        # compila web/dist
+npm run contrato:test       # cargo test del contrato
+npm run contrato:desplegar  # cuentas de prueba + despliegue en testnet
 ```
 
-Antes de dar un cambio por terminado, ejecute `npm run typecheck` y `npm test`.
+Antes de dar un cambio por terminado, ejecute `npm run typecheck` y `npm test`
+(y `npm run contrato:test` si tocó el contrato).
 
 ## Convenciones
 
