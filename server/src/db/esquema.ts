@@ -85,6 +85,52 @@ CREATE TABLE IF NOT EXISTS anclajes_mock (
 );
 CREATE SEQUENCE IF NOT EXISTS seq_ledger_mock START 1000000;
 
+-- Contra-análisis de un lote en garantía (marketplace). Se inserta solo
+-- después de registrarse en el contrato, así que siempre tiene tx_id.
+CREATE TABLE IF NOT EXISTS contra_analisis (
+  id                SERIAL PRIMARY KEY,
+  lote_id           TEXT NOT NULL REFERENCES lotes(id),
+  laboratorio_id    TEXT NOT NULL REFERENCES laboratorios(id),
+  analista_id       INT NOT NULL REFERENCES usuarios(id),
+  -- Campos sellados por el hash (integridad/canonico.ts, registro "contra_analisis")
+  fecha_analisis    TEXT NOT NULL,
+  metodo            TEXT NOT NULL,
+  pureza            TEXT NOT NULL,
+  composicion       JSONB NOT NULL,
+  observaciones     TEXT NOT NULL DEFAULT '',
+  pdf_sha256        TEXT NOT NULL,
+  salt              TEXT NOT NULL,
+  version_esquema   TEXT NOT NULL,
+  hash              TEXT NOT NULL,
+  -- Informativo
+  pdf_nombre        TEXT NOT NULL,
+  tx_id             TEXT NOT NULL,
+  fecha_anclaje     TEXT NOT NULL,
+  creado_en         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS contra_analisis_lote_idx ON contra_analisis (lote_id);
+
+-- Copia de los eventos del contrato (el RPC solo los conserva unos días). Se
+-- usa para la línea de tiempo; la verificación siempre lee el contrato.
+CREATE TABLE IF NOT EXISTS eventos_contrato (
+  contrato_id  TEXT NOT NULL,
+  id           TEXT NOT NULL,
+  tipo         TEXT NOT NULL,
+  lote_id      TEXT,
+  datos        JSONB NOT NULL,
+  ledger       INT NOT NULL,
+  fecha        TEXT NOT NULL,
+  tx_hash      TEXT NOT NULL,
+  PRIMARY KEY (contrato_id, id)
+);
+CREATE INDEX IF NOT EXISTS eventos_contrato_lote_idx ON eventos_contrato (contrato_id, lote_id);
+
+-- Hasta dónde se leyeron los eventos de cada contrato.
+CREATE TABLE IF NOT EXISTS indice_eventos (
+  contrato_id  TEXT PRIMARY KEY,
+  cursor       TEXT
+);
+
 CREATE OR REPLACE FUNCTION mt_solo_insercion() RETURNS trigger AS $$
 BEGIN
   RAISE EXCEPTION 'La tabla % es de solo inserción', TG_TABLE_NAME;
@@ -119,6 +165,14 @@ CREATE TRIGGER mt_lotes_solo_insercion BEFORE UPDATE OR DELETE ON lotes
 DROP TRIGGER IF EXISTS mt_analisis_protegido ON analisis;
 CREATE TRIGGER mt_analisis_protegido BEFORE UPDATE OR DELETE ON analisis
   FOR EACH ROW EXECUTE FUNCTION mt_proteger_analisis();
+
+DROP TRIGGER IF EXISTS mt_contra_analisis_solo_insercion ON contra_analisis;
+CREATE TRIGGER mt_contra_analisis_solo_insercion BEFORE UPDATE OR DELETE ON contra_analisis
+  FOR EACH ROW EXECUTE FUNCTION mt_solo_insercion();
+
+DROP TRIGGER IF EXISTS mt_eventos_contrato_solo_insercion ON eventos_contrato;
+CREATE TRIGGER mt_eventos_contrato_solo_insercion BEFORE UPDATE OR DELETE ON eventos_contrato
+  FOR EACH ROW EXECUTE FUNCTION mt_solo_insercion();
 
 DROP TRIGGER IF EXISTS mt_anclajes_mock_solo_insercion ON anclajes_mock;
 CREATE TRIGGER mt_anclajes_mock_solo_insercion BEFORE UPDATE OR DELETE ON anclajes_mock

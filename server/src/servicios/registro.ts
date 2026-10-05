@@ -33,7 +33,7 @@ export async function registrarLote(ctx: Contexto, usuario: Usuario, datos: Lote
   return lote;
 }
 
-async function prepararPdf(pdf: PdfSubido) {
+export async function prepararPdf(pdf: PdfSubido) {
   if (!esPdf(pdf.buffer)) throw new ErrorHttp(400, 'El informe debe ser un archivo PDF');
   const sha256 = await guardarPdf(pdf.buffer);
   return { sha256, nombre: pdf.nombre.slice(0, 200) || 'informe.pdf' };

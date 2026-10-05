@@ -4,10 +4,14 @@ import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import { config } from './config.ts';
+import { ErrorContrato } from './anclaje/erroresContrato.ts';
 import { ErrorHttp, type Contexto } from './contexto.ts';
+import { rutasContraAnalisis } from './rutas/contraAnalisis.ts';
 import { rutasDemo } from './rutas/demo.ts';
 import { rutasLaboratorio } from './rutas/laboratorio.ts';
+import { rutasMercado } from './rutas/mercado.ts';
 import { rutasPublicas } from './rutas/publico.ts';
+import { FondosInsuficientes, TransaccionRechazada } from './stellar/contrato.ts';
 import { ErrorValidacion } from './validacion.ts';
 
 export function crearApp(ctx: Contexto) {
@@ -16,6 +20,8 @@ export function crearApp(ctx: Contexto) {
   app.use(express.json({ limit: '100kb' }));
 
   app.use('/api/publico', rutasPublicas(ctx));
+  app.use('/api/mercado', rutasMercado(ctx));
+  app.use('/api/contra-analisis', rutasContraAnalisis(ctx));
   if (config.demoAlterar) app.use('/api/demo', rutasDemo(ctx));
   app.use('/api', rutasLaboratorio(ctx));
   app.use('/api', (_req, _res) => {
@@ -34,6 +40,13 @@ export function crearApp(ctx: Contexto) {
       res.status(400).json({ error: 'Revise los datos del formulario', errores: error.errores });
     } else if (error instanceof ErrorHttp) {
       res.status(error.estado).json({ error: error.message });
+    } else if (error instanceof ErrorContrato) {
+      // El contrato rechazó la operación (estado del lote, permisos...).
+      res.status(409).json({ error: error.message, codigo_contrato: error.codigo });
+    } else if (error instanceof FondosInsuficientes) {
+      res.status(402).json({ error: error.message, fondos_insuficientes: true });
+    } else if (error instanceof TransaccionRechazada) {
+      res.status(422).json({ error: error.message });
     } else if (error instanceof multer.MulterError) {
       const mensaje = error.code === 'LIMIT_FILE_SIZE' ? 'El PDF supera el tamaño máximo (20 MB)' : error.message;
       res.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: mensaje });
