@@ -37,6 +37,9 @@ export function Inicio() {
               <Link to="/verificar" className="boton bg-mineral-500 px-5 py-3 text-base text-stone-900 hover:bg-mineral-400">
                 Verificar un lote
               </Link>
+              <Link to="/mercado" className="boton border border-stone-600 px-5 py-3 text-base text-white hover:bg-stone-800">
+                Ver el mercado
+              </Link>
               <Link to="/laboratorio" className="boton border border-stone-600 px-5 py-3 text-base text-white hover:bg-stone-800">
                 Portal del laboratorio
               </Link>
