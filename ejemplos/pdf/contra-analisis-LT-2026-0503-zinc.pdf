@@ -1,0 +1,45 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 512 >>
+stream
+BT /F1 16 Tf 56 780 Td
+(Contra-analisis - MinerTrace) Tj
+/F1 11 Tf 0 -28 Td 15 TL
+(Laboratorio de Contraste del Sur \(LAB-002\)) '
+(Lote: LT-2026-0503) '
+(Mineral: Concentrado de zinc \(San Cristobal\)) '
+(Metodo: ICP-OES     Fecha: 2026-10-08 15:00 UTC) '
+(PUREZA: 51.90 %) '
+(Composicion: Zn 51.90 %   Fe 7.90 %   S 30.00 %   otros 10.20 %) '
+(Analista: Rosa Condori) '
+(Certificado: 52.30 %. Diferencia 0.40 puntos: dentro de tolerancia.) '
+() '
+(Documento de ejemplo para la demostracion de MinerTrace.) '
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000804 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+901
+%%EOF

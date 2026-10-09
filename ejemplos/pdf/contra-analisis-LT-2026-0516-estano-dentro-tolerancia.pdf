@@ -1,0 +1,45 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 505 >>
+stream
+BT /F1 16 Tf 56 780 Td
+(Contra-analisis - MinerTrace) Tj
+/F1 11 Tf 0 -28 Td 15 TL
+(Laboratorio de Contraste del Sur \(LAB-002\)) '
+(Lote: LT-2026-0516) '
+(Mineral: Concentrado de estano \(Caracoles\)) '
+(Metodo: FRX     Fecha: 2026-10-08 11:30 UTC) '
+(PUREZA: 69.50 %) '
+(Composicion: Sn 69.50 %   Fe 5.00 %   W 1.80 %   otros 23.70 %) '
+(Analista: Jorge Choque) '
+(Certificado: 70.10 %. Diferencia 0.60 puntos: dentro de tolerancia.) '
+() '
+(Documento de ejemplo para la demostracion de MinerTrace.) '
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000797 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+894
+%%EOF

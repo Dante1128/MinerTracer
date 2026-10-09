@@ -11,6 +11,7 @@ pinned: false
 # MinerTrace — Fase 1
 
 Trazabilidad e integridad de análisis minerales. El diseño completo está en [MinerTrace.md](MinerTrace.md).
+Para usar y presentar la aplicación (vistas, credenciales, wallet, transacciones y guiones de demo), vea [GUIA.md](GUIA.md).
 
 Esta fase incluye la aplicación web completa y el backend, con el hashing real (RFC 8785 + SHA-256).
 El **anclaje en Stellar está simulado** (`AnclajeMock`); ver la sección 17 del documento para la Fase 2.
@@ -222,6 +223,32 @@ Lo firma la wallet del laboratorio, igual que los análisis.
 la dirección del vendedor y siga el flujo: publicar → comprar → (contra-análisis) → confirmar o reembolsar.
 
 `npm run test:testnet` incluye una prueba del marketplace con cuentas nuevas fondeadas con friendbot.
+
+## Datos de demostración en testnet
+
+Con el servidor en marcha (`npm run dev`, con `ANCLAJE=stellar`) y las cuentas del script de despliegue:
+
+```bash
+npm run demo:poblar
+```
+
+Registra 18 lotes de minería boliviana (oro, plata, estaño y otros) usando la API, igual que la web, y firma
+cada paso con la cuenta que correspondería en Freighter (laboratorio, vendedor o comprador). Todo queda en el
+contrato de testnet:
+
+| Estado tras poblar | Oro | Plata | Estaño | Otros |
+|---|---|---|---|---|
+| En venta | 0508 (300 XLM) | 0512 (110 XLM) | 0457, 0501, 0515, 0517 (certifica LAB-002) | 0506 wolframio (LAB-002) |
+| Vendido (contra-análisis dentro de tolerancia) | 0509 | 0502, 0513 | | |
+| En garantía: el comprador puede confirmar | 0510 | | 0516 | 0503 zinc |
+| En disputa: el comprador puede pedir el reembolso | 0511 | | | 0504 plomo |
+| Certificado con corrección (v1 y v2) | | 0514 | 0505 | |
+| Esperando la firma del laboratorio con Freighter | 0518 | | | 0507 antimonio |
+
+Todos los códigos son `LT-2026-XXXX`. Las transacciones del contrato se ven en
+`https://stellar.expert/explorer/testnet/contract/<STELLAR_CONTRATO_ID>`.
+
+Los lotes que ya existen se omiten, así que se puede volver a ejecutar.
 
 ## El laboratorio firma con su propia wallet
 
