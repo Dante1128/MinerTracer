@@ -11,6 +11,7 @@
     "test": "npm test --prefix server",
     "test:testnet": "npm run test:testnet --prefix server",
     "demo:poblar": "npm run demo:poblar --prefix server",
+    "demo:pdfs": "npm run demo:pdfs --prefix server",
     "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix web",
     "contrato:test": "cargo test --manifest-path contracts/minertrace/Cargo.toml",
     "contrato:build": "stellar contract build --manifest-path contracts/minertrace/Cargo.toml",

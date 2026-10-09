@@ -270,17 +270,17 @@ debe registrar un lote poniendo esa dirección como dueño.
 La barra superior siempre muestra: **Verificar · Mercado · Mis lotes · Laboratorio · [wallet]**.
 Al iniciar sesión como laboratorio aparece una segunda barra: **Panel · Registrar análisis · Contra-análisis**.
 
-### 6.1 Inicio — `/`
+### 7.1 Inicio — `/`
 - **Acceso:** logo de MinerTrace. Público.
 - **Funciones:** explica el problema, cómo funciona en 4 pasos, qué garantiza y qué no; botones a
   **Verificar un lote**, **Ver el mercado** y **Portal del laboratorio**; atajo al lote de ejemplo.
 
-### 6.2 Verificar — `/verificar`
+### 7.2 Verificar — `/verificar`
 - **Acceso:** menú **Verificar**. Público.
 - **Funciones:** escribir el código del lote (ej. `LT-2026-0509`) o **escanear el QR** con la cámara del
   celular o la computadora; lleva al resultado de verificación.
 
-### 6.3 Resultado de verificación — `/verificar/LT-…`
+### 7.3 Resultado de verificación — `/verificar/LT-…`
 - **Acceso:** desde Verificar, escaneando el QR impreso, o con el enlace "Vista pública". Público.
 - **Funciones:**
   - **Veredicto** en grande: ✓ *Registro íntegro*, ✕ *Registro alterado* (con los motivos), … *Anclaje pendiente*.
@@ -298,12 +298,12 @@ Al iniciar sesión como laboratorio aparece una segunda barra: **Panel · Regist
   - **Línea de tiempo** con cada evento del contrato (certificado, publicado, comprado, contra-análisis,
     vendido, reembolsado o cobrado por vencimiento) y su enlace a la transacción.
 
-### 6.4 Mercado — `/mercado`
+### 7.4 Mercado — `/mercado`
 - **Acceso:** menú **Mercado**. Público (para comprar hace falta la wallet).
 - **Funciones:** tarjetas de los lotes **en venta**, leídos del contrato: código, mineral, peso, origen,
   **pureza certificada**, precio en XLM y laboratorio que certificó. Clic en una tarjeta → detalle.
 
-### 6.5 Detalle de mercado — `/mercado/LT-…`
+### 7.5 Detalle de mercado — `/mercado/LT-…`
 - **Acceso:** clic en un lote del Mercado. Público; para comprar, wallet del comprador.
 - **Funciones:** estado comercial y botón **"Comprar por N XLM"** (firma `buy` en Freighter), con los pasos
   *Preparando → Firme en Freighter → Enviando → Confirmada* y el enlace a la transacción. Avisa si la
@@ -311,7 +311,7 @@ Al iniciar sesión como laboratorio aparece una segunda barra: **Panel · Regist
 - **Errores que muestra:** firma rechazada, red equivocada, **fondos insuficientes** (con el precio y el saldo),
   el vendedor no puede comprar su propio lote.
 
-### 6.6 Mis lotes — `/mis-lotes`
+### 7.6 Mis lotes — `/mis-lotes`
 - **Acceso:** menú **Mis lotes** o clic en el botón de la wallet. Requiere wallet conectada.
 - **Funciones según el rol de la cuenta conectada:**
 
@@ -325,17 +325,17 @@ Al iniciar sesión como laboratorio aparece una segunda barra: **Panel · Regist
 | Comprador | En garantía | **Confirmar recepción y liberar el pago** (firma `confirm`) y fecha límite |
 | Comprador | En disputa | **Pedir reembolso** (firma `refund`) |
 
-### 6.7 Login del laboratorio — `/laboratorio/login`
+### 7.7 Login del laboratorio — `/laboratorio/login`
 - **Acceso:** menú **Laboratorio** (si no hay sesión, redirige aquí).
 - **Funciones:** correo y contraseña (ver sección 5). En desarrollo muestra los usuarios de prueba.
 
-### 6.8 Panel — `/laboratorio`
+### 7.8 Panel — `/laboratorio`
 - **Acceso:** menú **Laboratorio** o **Panel**. Requiere sesión.
 - **Funciones:** totales (análisis, lotes, pendientes de anclaje); tabla de análisis con lote, pureza, fecha y
   estado (**Anclado**, **Pendiente**, **Falta la firma del laboratorio**); pestaña **Lotes** con enlace a la
   vista pública; botones **+ Registrar análisis** y **Contra-análisis**.
 
-### 6.9 Registrar análisis — `/laboratorio/nuevo`
+### 7.9 Registrar análisis — `/laboratorio/nuevo`
 - **Acceso:** **Registrar análisis** (barra del portal) o **+ Registrar análisis** (panel). Requiere sesión.
 - **Funciones:**
   1. **Lote:** elegir uno existente o crear uno nuevo: código (opcional; si no, se genera), tipo de mineral,
@@ -344,7 +344,7 @@ Al iniciar sesión como laboratorio aparece una segunda barra: **Panel · Regist
      composición química por elemento (símbolos químicos; debe sumar ≤ 100 %), observaciones y **PDF** del informe.
 - Al guardar, el análisis queda **pendiente** y se abre su detalle para firmarlo.
 
-### 6.10 Detalle del análisis — `/laboratorio/analisis/AN-…`
+### 7.10 Detalle del análisis — `/laboratorio/analisis/AN-…`
 - **Acceso:** clic en un análisis del panel. Requiere sesión del laboratorio dueño.
 - **Funciones:**
   - **Firmar y anclar con Freighter** (si falta la firma): muestra la cuenta del laboratorio, avisa si la wallet
@@ -356,7 +356,7 @@ Al iniciar sesión como laboratorio aparece una segunda barra: **Panel · Regist
   - **Simular fraude** (solo demo, recuadro rojo): cambia la pureza directamente en la base de datos y
     reemplaza el PDF, como haría un intermediario. La verificación pasa a **Registro alterado**.
 
-### 6.11 Contra-análisis — `/laboratorio/contra-analisis`
+### 7.11 Contra-análisis — `/laboratorio/contra-analisis`
 - **Acceso:** **Contra-análisis** (barra del portal). Requiere sesión; se usa con el **otro** laboratorio.
 - **Funciones:** lista de lotes **en garantía**, sin contra-análisis, certificados por **otro** laboratorio
   (nadie contra-analiza lo suyo). Se elige el lote, se cargan los resultados y el PDF, y se firma con la wallet
@@ -473,6 +473,33 @@ El lote de ejemplo de la semilla más 18 creados con `npm run demo:poblar`. Due�
 | LT-2026-0517 | Concentrado de estaño | Huanuni, Oruro (LAB-002) | 66,35 % Sn | **En venta** · 80 XLM |
 | LT-2026-0518 | Doré de oro | Tipuani, La Paz | 86,10 % Au | **Falta la firma** |
 
+
+### PDF de ejemplo para subir
+
+En `ejemplos/pdf/` hay informes listos para adjuntar (se regeneran con `npm run demo:pdfs`). Cualquier otro
+PDF también sirve. **El formulario no lee el PDF:** escribe a mano los mismos valores que trae el informe.
+
+**Contra-análisis** (Laboratorio → **Contra-análisis**, con `analista@lab002.test` y Freighter en **Lab B**):
+
+| Archivo | Lote | Método | Pureza | Composición | Resultado esperado |
+|---|---|---|---|---|---|
+| `contra-analisis-LT-2026-0510-oro-disputa.pdf` | LT-2026-0510 (oro, certificado 84,60) | Ensayo al fuego | 80.00 | Au 80.00 · Ag 17.30 · Cu 2.10 · otros 0.60 | **En disputa** |
+| `contra-analisis-LT-2026-0510-oro-dentro-tolerancia.pdf` | LT-2026-0510 | Ensayo al fuego | 84.20 | Au 84.20 · Ag 13.40 · Cu 1.80 · otros 0.60 | Sigue en garantía |
+| `contra-analisis-LT-2026-0516-estano-disputa.pdf` | LT-2026-0516 (estaño, certificado 70,10) | FRX | 66.00 | Sn 66.00 · Fe 5.80 · W 1.60 · otros 26.60 | **En disputa** |
+| `contra-analisis-LT-2026-0516-estano-dentro-tolerancia.pdf` | LT-2026-0516 | FRX | 69.50 | Sn 69.50 · Fe 5.00 · W 1.80 · otros 23.70 | Sigue en garantía |
+| `contra-analisis-LT-2026-0503-zinc.pdf` | LT-2026-0503 (zinc, certificado 52,30) | ICP-OES | 51.90 | Zn 51.90 · Fe 7.90 · S 30.00 · otros 10.20 | Sigue en garantía |
+
+Cada lote admite **un solo** contra-análisis por venta: para el mismo lote elige el de disputa **o** el de tolerancia.
+
+**Análisis nuevos** (Laboratorio → **Registrar análisis**, con `analista@lab001.test` y luego Freighter en **Lab A**
+para firmar). En "Dirección Stellar del dueño" pon la del vendedor para poder venderlo después:
+
+| Archivo | Tipo de mineral | Método | Pureza | Composición |
+|---|---|---|---|---|
+| `informe-dore-oro-tipuani.pdf` | Doré de oro | Ensayo al fuego | 89.70 | Au 89.70 · Ag 8.90 · Cu 1.00 · otros 0.40 |
+| `informe-concentrado-plata-potosi.pdf` | Concentrado de plata | Absorción atómica (AAS) | 43.10 | Ag 43.10 · Pb 19.20 · Zn 10.10 · otros 27.60 |
+| `informe-concentrado-estano-huanuni.pdf` | Concentrado de estaño | FRX | 67.20 | Sn 67.20 · Fe 6.40 · S 3.00 · otros 23.40 |
+
 ---
 
 ## 11. Guiones para la demo
@@ -506,7 +533,8 @@ http://localhost:5173.
 4. Freighter en **Vendedor** → **Mis lotes**: el lote está **bloqueado** hasta que el laboratorio lo reanalice.
 
    *En vivo desde cero:* con `LT-2026-0510` (oro en garantía), entra como `analista@lab002.test` →
-   **Contra-análisis** → elegir 0510 → pureza 80 → Freighter en **Lab B** → firmar → *pasó a disputa*.
+   **Contra-análisis** → elegir 0510 → pureza 80.00 (Au 80.00, Ag 17.30, Cu 2.10, otros 0.60) → adjuntar
+   `ejemplos/pdf/contra-analisis-LT-2026-0510-oro-disputa.pdf` → Freighter en **Lab B** → firmar → *pasó a disputa*.
 
 ### Guion E — "Correcciones transparentes" (2 min)
 `/verificar/LT-2026-0514` → **Historial de versiones**: v1 41,30 % y v2 41,75 % con el motivo, ambas íntegras.
@@ -577,6 +605,7 @@ Freighter (firma) ◄──────── XDR ─────────┘
 ```bash
 npm run dev                 # arrancar
 npm run demo:poblar         # (re)llenar los datos de la demo
+npm run demo:pdfs           # regenerar los PDF de ejemplo (ejemplos/pdf/)
 npm test                    # pruebas del servidor
 npm run contrato:test       # pruebas del contrato
 npm run test:testnet        # pruebas reales contra testnet (necesita las variables STELLAR_*)
