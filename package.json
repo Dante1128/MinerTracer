@@ -1,8 +1,12 @@
 {
   "name": "minertrace",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "instalar": "npm ci --prefix server && npm ci --prefix web",
+    "postinstall": "npm ci --prefix server --include=dev && npm ci --prefix web --include=dev",
     "dev": "node scripts/dev.mjs",
     "dev:server": "npm run dev --prefix server",
     "dev:web": "npm run dev --prefix web",
