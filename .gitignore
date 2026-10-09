@@ -2,7 +2,10 @@ node_modules/
 dist/
 dev-dist/
 server/datos/
+server/datos*/
 .env
+.env.*
+!.env.example
 *.log
 # Contrato Soroban: compilación, instantáneas que generan las pruebas y configuración local del CLI
 target/
