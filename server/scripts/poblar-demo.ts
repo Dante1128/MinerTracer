@@ -171,6 +171,205 @@ const LOTES: LoteDemo[] = [
     },
     destino: 'sin_firmar',
   },
+
+  // ---- Oro ----
+  {
+    codigo: 'LT-2026-0508',
+    lab: 'A',
+    tipo: 'Doré de oro',
+    peso: '12.450',
+    origen: 'Cooperativa Aurífera Tipuani, Larecaja, La Paz, Bolivia',
+    coordenadas: '-15.546900, -68.016700',
+    analisis: {
+      fecha: '2026-09-03T15:00:00Z',
+      metodo: 'Ensayo al fuego',
+      pureza: '88.40',
+      composicion: { Au: '88.40', Ag: '9.80', Cu: '1.20', otros: '0.60' },
+      observaciones: 'Copelación por duplicado; barra N.º TP-0912.',
+    },
+    destino: 'en_venta',
+    precio: '300',
+  },
+  {
+    codigo: 'LT-2026-0509',
+    lab: 'A',
+    tipo: 'Doré de oro',
+    peso: '8.920',
+    origen: 'Cooperativa Aurífera Guanay, Larecaja, La Paz, Bolivia',
+    coordenadas: '-15.497800, -67.881500',
+    analisis: {
+      fecha: '2026-09-06T10:30:00Z',
+      metodo: 'Ensayo al fuego',
+      pureza: '91.25',
+      composicion: { Au: '91.25', Ag: '7.40', Cu: '0.90', otros: '0.45' },
+      observaciones: 'Barra N.º GY-0447.',
+    },
+    destino: 'vendido',
+    precio: '320',
+    contra: '91.10',
+  },
+  {
+    codigo: 'LT-2026-0510',
+    lab: 'A',
+    tipo: 'Doré de oro',
+    peso: '15.300',
+    origen: 'Cooperativa Aurífera Mapiri, Larecaja, La Paz, Bolivia',
+    coordenadas: '-15.300000, -68.216700',
+    analisis: {
+      fecha: '2026-09-11T12:10:00Z',
+      metodo: 'ICP-OES',
+      pureza: '84.60',
+      composicion: { Au: '84.60', Ag: '13.10', Cu: '1.70', otros: '0.60' },
+      observaciones: 'Muestra por perforación en tres puntos de la barra.',
+    },
+    destino: 'en_garantia',
+    precio: '280',
+  },
+  {
+    codigo: 'LT-2026-0511',
+    lab: 'A',
+    tipo: 'Doré de oro',
+    peso: '6.780',
+    origen: 'Cooperativa Aurífera San Simón, Beni, Bolivia',
+    coordenadas: '-13.433300, -62.266700',
+    analisis: {
+      fecha: '2026-09-14T09:45:00Z',
+      metodo: 'Ensayo al fuego',
+      pureza: '79.30',
+      composicion: { Au: '79.30', Ag: '17.20', Cu: '2.80', otros: '0.70' },
+      observaciones: 'Barra con inclusiones superficiales.',
+    },
+    destino: 'disputa',
+    precio: '250',
+    contra: '76.90',
+  },
+  {
+    codigo: 'LT-2026-0518',
+    lab: 'A',
+    tipo: 'Doré de oro',
+    peso: '10.050',
+    origen: 'Cooperativa Aurífera Tipuani, Larecaja, La Paz, Bolivia',
+    coordenadas: '-15.546900, -68.016700',
+    analisis: {
+      fecha: '2026-09-28T11:00:00Z',
+      metodo: 'Ensayo al fuego',
+      pureza: '86.10',
+      composicion: { Au: '86.10', Ag: '12.20', Cu: '1.20', otros: '0.50' },
+      observaciones: 'Pendiente de firma: barra N.º TP-0931.',
+    },
+    destino: 'sin_firmar',
+  },
+
+  // ---- Plata ----
+  {
+    codigo: 'LT-2026-0512',
+    lab: 'A',
+    tipo: 'Concentrado de plata',
+    peso: '6800.000',
+    origen: 'Cooperativa Minera Pulacayo, Uyuni, Potosí, Bolivia',
+    coordenadas: '-20.410600, -66.687500',
+    analisis: {
+      fecha: '2026-09-07T08:20:00Z',
+      metodo: 'Absorción atómica (AAS)',
+      pureza: '38.60',
+      composicion: { Ag: '38.60', Pb: '21.30', Zn: '11.40', otros: '28.70' },
+      observaciones: 'Concentrado por flotación.',
+    },
+    destino: 'en_venta',
+    precio: '110',
+  },
+  {
+    codigo: 'LT-2026-0513',
+    lab: 'A',
+    tipo: 'Doré de plata',
+    peso: '320.000',
+    origen: 'Planta San Bartolomé, Potosí, Bolivia',
+    coordenadas: '-19.583300, -65.716700',
+    analisis: {
+      fecha: '2026-09-10T17:00:00Z',
+      metodo: 'Volumetría',
+      pureza: '97.20',
+      composicion: { Ag: '97.20', Au: '0.35', Cu: '2.10', otros: '0.35' },
+      observaciones: 'Método de Volhard; lingotes SB-221 a SB-228.',
+    },
+    destino: 'vendido',
+    precio: '200',
+    contra: '97.05',
+  },
+  {
+    codigo: 'LT-2026-0514',
+    lab: 'A',
+    tipo: 'Concentrado de plata',
+    peso: '5150.000',
+    origen: 'Cooperativa Minera Colquechaquita, Potosí, Bolivia',
+    coordenadas: '-19.300000, -65.583300',
+    analisis: {
+      fecha: '2026-09-18T14:25:00Z',
+      metodo: 'Ensayo al fuego',
+      pureza: '41.30',
+      composicion: { Ag: '41.30', Pb: '16.80', Sb: '4.20', otros: '37.70' },
+      observaciones: 'Lectura inicial.',
+    },
+    destino: 'corregido',
+    correccion: {
+      pureza: '41.75',
+      composicion: { Ag: '41.75', Pb: '16.60', Sb: '4.15', otros: '37.50' },
+      motivo: 'Corrección por pérdida en copelación (factor de recuperación)',
+    },
+  },
+
+  // ---- Estaño ----
+  {
+    codigo: 'LT-2026-0515',
+    lab: 'A',
+    tipo: 'Concentrado de estaño',
+    peso: '21300.000',
+    origen: 'Cooperativa Minera Siglo XX, Llallagua, Potosí, Bolivia',
+    coordenadas: '-18.424200, -66.583900',
+    analisis: {
+      fecha: '2026-09-04T13:40:00Z',
+      metodo: 'FRX',
+      pureza: '64.80',
+      composicion: { Sn: '64.80', Fe: '8.10', S: '2.60', otros: '24.50' },
+      observaciones: 'Concentrado gravimétrico.',
+    },
+    destino: 'en_venta',
+    precio: '75',
+  },
+  {
+    codigo: 'LT-2026-0516',
+    lab: 'A',
+    tipo: 'Concentrado de estaño',
+    peso: '11750.000',
+    origen: 'Cooperativa Minera Caracoles, Inquisivi, La Paz, Bolivia',
+    coordenadas: '-16.966700, -67.200000',
+    analisis: {
+      fecha: '2026-09-17T10:05:00Z',
+      metodo: 'FRX',
+      pureza: '70.10',
+      composicion: { Sn: '70.10', Fe: '4.90', W: '1.80', otros: '23.20' },
+      observaciones: 'Contiene trazas de wolframio.',
+    },
+    destino: 'en_garantia',
+    precio: '90',
+  },
+  {
+    codigo: 'LT-2026-0517',
+    lab: 'B',
+    tipo: 'Concentrado de estaño',
+    peso: '19400.000',
+    origen: 'Cooperativa Minera Huanuni, Oruro, Bolivia',
+    coordenadas: '-18.289400, -66.838300',
+    analisis: {
+      fecha: '2026-09-22T09:15:00Z',
+      metodo: 'ICP-OES',
+      pureza: '66.35',
+      composicion: { Sn: '66.35', Fe: '6.70', S: '2.90', otros: '24.05' },
+      observaciones: 'Certificado por el laboratorio de contraste.',
+    },
+    destino: 'en_venta',
+    precio: '80',
+  },
 ];
 
 // ---- Utilidades ----
@@ -417,7 +616,8 @@ for (const lote of LOTES) {
 
 console.log(`
 Listo. Abra http://localhost:5173 y revise:
-  Mercado ............ LT-2026-0457, 0501 y 0506 en venta
-  Mis lotes .......... vendedor: 0503 en garantía, 0504 en disputa · comprador: 0502 comprado
-  Verificar .......... /verificar/LT-2026-0505 (dos versiones) y /verificar/LT-2026-0504 (línea de tiempo)
-  Portal (LAB-001) ... AN de LT-2026-0507 espera la firma con Freighter`);
+  Mercado ............ oro (0508), plata (0512), estaño (0457, 0501, 0515, 0517) y wolframio (0506) en venta
+  Mis lotes .......... vendedor: en garantía 0503, 0510, 0516 · en disputa 0504, 0511 · comprador: comprados 0502, 0509, 0513
+  Verificar .......... dos versiones: LT-2026-0505 y LT-2026-0514 · línea de tiempo: LT-2026-0509 o LT-2026-0511
+  Portal (LAB-001) ... LT-2026-0507 y LT-2026-0518 esperan la firma con Freighter
+  Explorador ......... https://stellar.expert/explorer/testnet/contract/${info.contrato_id}`);

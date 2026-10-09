@@ -221,19 +221,21 @@ Con el servidor en marcha (`npm run dev`, con `ANCLAJE=stellar`) y las cuentas d
 npm run demo:poblar
 ```
 
-Registra siete lotes de minería boliviana usando la API, igual que la web, y firma cada paso con la cuenta que
-correspondería en Freighter (laboratorio, vendedor o comprador). Todo queda en el contrato de testnet:
+Registra 18 lotes de minería boliviana (oro, plata, estaño y otros) usando la API, igual que la web, y firma
+cada paso con la cuenta que correspondería en Freighter (laboratorio, vendedor o comprador). Todo queda en el
+contrato de testnet:
 
-| Lote | Mineral | Estado tras poblar |
-|---|---|---|
-| LT-2026-0457 | Estaño (semilla) | En venta, 120 XLM |
-| LT-2026-0501 | Estaño, Huanuni | En venta, 85 XLM |
-| LT-2026-0502 | Plata, Cerro Rico | Vendido (contra-análisis dentro de tolerancia) |
-| LT-2026-0503 | Zinc, San Cristóbal | En garantía: el comprador puede confirmar |
-| LT-2026-0504 | Plomo, Porco | En disputa: el comprador puede pedir el reembolso |
-| LT-2026-0505 | Estaño, Colquiri | Certificado con corrección (v1 y v2) |
-| LT-2026-0506 | Wolframio, Chojlla (certifica LAB-002) | En venta, 150 XLM |
-| LT-2026-0507 | Antimonio, Caracota | Registrado, esperando la firma del laboratorio con Freighter |
+| Estado tras poblar | Oro | Plata | Estaño | Otros |
+|---|---|---|---|---|
+| En venta | 0508 (300 XLM) | 0512 (110 XLM) | 0457, 0501, 0515, 0517 (certifica LAB-002) | 0506 wolframio (LAB-002) |
+| Vendido (contra-análisis dentro de tolerancia) | 0509 | 0502, 0513 | | |
+| En garantía: el comprador puede confirmar | 0510 | | 0516 | 0503 zinc |
+| En disputa: el comprador puede pedir el reembolso | 0511 | | | 0504 plomo |
+| Certificado con corrección (v1 y v2) | | 0514 | 0505 | |
+| Esperando la firma del laboratorio con Freighter | 0518 | | | 0507 antimonio |
+
+Todos los códigos son `LT-2026-XXXX`. Las transacciones del contrato se ven en
+`https://stellar.expert/explorer/testnet/contract/<STELLAR_CONTRATO_ID>`.
 
 Los lotes que ya existen se omiten, así que se puede volver a ejecutar.
 
