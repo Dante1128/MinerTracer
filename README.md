@@ -213,6 +213,30 @@ la dirección del vendedor y siga el flujo: publicar → comprar → (contra-an�
 
 `npm run test:testnet` incluye una prueba del marketplace con cuentas nuevas fondeadas con friendbot.
 
+## Datos de demostración en testnet
+
+Con el servidor en marcha (`npm run dev`, con `ANCLAJE=stellar`) y las cuentas del script de despliegue:
+
+```bash
+npm run demo:poblar
+```
+
+Registra siete lotes de minería boliviana usando la API, igual que la web, y firma cada paso con la cuenta que
+correspondería en Freighter (laboratorio, vendedor o comprador). Todo queda en el contrato de testnet:
+
+| Lote | Mineral | Estado tras poblar |
+|---|---|---|
+| LT-2026-0457 | Estaño (semilla) | En venta, 120 XLM |
+| LT-2026-0501 | Estaño, Huanuni | En venta, 85 XLM |
+| LT-2026-0502 | Plata, Cerro Rico | Vendido (contra-análisis dentro de tolerancia) |
+| LT-2026-0503 | Zinc, San Cristóbal | En garantía: el comprador puede confirmar |
+| LT-2026-0504 | Plomo, Porco | En disputa: el comprador puede pedir el reembolso |
+| LT-2026-0505 | Estaño, Colquiri | Certificado con corrección (v1 y v2) |
+| LT-2026-0506 | Wolframio, Chojlla (certifica LAB-002) | En venta, 150 XLM |
+| LT-2026-0507 | Antimonio, Caracota | Registrado, esperando la firma del laboratorio con Freighter |
+
+Los lotes que ya existen se omiten, así que se puede volver a ejecutar.
+
 ## El laboratorio firma con su propia wallet
 
 Con `FIRMA_LABORATORIO=wallet` (por defecto), el servidor no firma los análisis del portal:
