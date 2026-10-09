@@ -1,6 +1,7 @@
 # MinerTrace — Fase 1
 
 Trazabilidad e integridad de análisis minerales. El diseño completo está en [MinerTrace.md](MinerTrace.md).
+Para usar y presentar la aplicación (vistas, credenciales, wallet, transacciones y guiones de demo), vea [GUIA.md](GUIA.md).
 
 Esta fase incluye la aplicación web completa y el backend, con el hashing real (RFC 8785 + SHA-256).
 El **anclaje en Stellar está simulado** (`AnclajeMock`); ver la sección 17 del documento para la Fase 2.
