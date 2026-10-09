@@ -1,3 +1,13 @@
+---
+title: MinerTrace
+emoji: ⛏️
+colorFrom: yellow
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # MinerTrace — Fase 1
 
 Trazabilidad e integridad de análisis minerales. El diseño completo está en [MinerTrace.md](MinerTrace.md).

@@ -9,3 +9,4 @@ target/
 test_snapshots/
 .stellar/
 .soroban/
+.neon

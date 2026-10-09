@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/dev-dist
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+server/datos
+contracts
+scripts
+.git
+.claude
+.neon
+.mcp.json
