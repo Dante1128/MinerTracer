@@ -8,18 +8,19 @@ una wallet, cómo ver las transacciones en Stellar testnet, el contrato, y guion
 ## Índice
 
 1. [Qué es MinerTrace](#1-qué-es-minertrace)
-2. [Qué es real y qué es de prueba](#2-qué-es-real-y-qué-es-de-prueba)
-3. [Arrancar la aplicación](#3-arrancar-la-aplicación)
-4. [Roles y credenciales](#4-roles-y-credenciales)
-5. [Conectar la wallet (Freighter)](#5-conectar-la-wallet-freighter)
-6. [Cada vista: acceso y funciones](#6-cada-vista-acceso-y-funciones)
-7. [El contrato en Stellar](#7-el-contrato-en-stellar)
-8. [Ver las transacciones en testnet](#8-ver-las-transacciones-en-testnet)
-9. [Datos de la demo (19 lotes)](#9-datos-de-la-demo-19-lotes)
-10. [Guiones para la demo](#10-guiones-para-la-demo)
-11. [Arquitectura y tecnologías](#11-arquitectura-y-tecnologías)
-12. [Limitaciones y pendientes](#12-limitaciones-y-pendientes)
-13. [Problemas frecuentes](#13-problemas-frecuentes)
+2. [Flujo completo y roles](#2-flujo-completo-y-roles)
+3. [Qué es real y qué es de prueba](#3-qué-es-real-y-qué-es-de-prueba)
+4. [Arrancar la aplicación](#4-arrancar-la-aplicación)
+5. [Credenciales y cuentas](#5-credenciales-y-cuentas)
+6. [Conectar la wallet (Freighter)](#6-conectar-la-wallet-freighter)
+7. [Cada vista: acceso y funciones](#7-cada-vista-acceso-y-funciones)
+8. [El contrato en Stellar](#8-el-contrato-en-stellar)
+9. [Ver las transacciones en testnet](#9-ver-las-transacciones-en-testnet)
+10. [Datos de la demo (19 lotes)](#10-datos-de-la-demo-19-lotes)
+11. [Guiones para la demo](#11-guiones-para-la-demo)
+12. [Arquitectura y tecnologías](#12-arquitectura-y-tecnologías)
+13. [Limitaciones y pendientes](#13-limitaciones-y-pendientes)
+14. [Problemas frecuentes](#14-problemas-frecuentes)
 
 ---
 
@@ -45,7 +46,122 @@ Por eso existe el contra-análisis.
 
 ---
 
-## 2. Qué es real y qué es de prueba
+## 2. Flujo completo y roles
+
+### 2.1 Los actores
+
+| Rol | Quién es en la vida real | Cómo se identifica | Qué hace | Qué **no** puede hacer |
+|---|---|---|---|---|
+| **Administrador** | MinerTrace o una autoridad minera | Wallet `minertrace-admin` (solo por consola) | Autoriza y revoca laboratorios en el contrato | Cambiar análisis, mover el dinero en garantía, comprar ni vender por otros |
+| **Laboratorio certificador** (LAB-001) | Laboratorio acreditado (ISO/IEC 17025) | Usuarios con contraseña + wallet del laboratorio (`lab-a`) | El **analista** registra lotes y análisis; el **supervisor** además corrige; ambos firman con la wallet del laboratorio | Editar o borrar un análisis ya registrado (solo agregar versiones); contra-analizar sus propios lotes |
+| **Laboratorio de contraste** (LAB-002) | Segundo laboratorio independiente | Usuarios con contraseña + wallet `lab-b` | Hace **contra-análisis** de lotes vendidos por otros laboratorios; también puede certificar sus propios lotes | Contra-analizar un lote que no está en garantía, o hacerlo dos veces en la misma venta |
+| **Dueño / vendedor** | Cooperativa minera o productor | Solo su wallet (`vendedor`) | Publica sus lotes con precio; cobra al confirmar el comprador o al vencer la garantía | Comprar su propio lote; cobrar antes del plazo o con el lote en disputa; publicar un lote en disputa |
+| **Comprador** | Comercializadora, exportadora, fundición | Solo su wallet (`comprador`) | Compra (paga en garantía), confirma la recepción o pide el reembolso si hay disputa | Recuperar el dinero sin una disputa; confirmar una compra ajena |
+| **Verificador público** | Auditor, regulador, aduana, cualquier persona | Ninguna (sin cuenta) | Verifica un lote con su código o QR y comprueba la evidencia en el explorador | Modificar nada |
+| **Contrato MinerTrace** | Programa en la blockchain (árbitro automático) | Dirección `CAHKM…` | Guarda las huellas, custodia el dinero y aplica las reglas | Ser modificado por nadie, ni siquiera por MinerTrace |
+| **Servidor MinerTrace** | La aplicación | — | Guarda los datos completos y los PDF, calcula las huellas, arma las transacciones y las envía | Firmar por las wallets (no tiene sus claves) ni marcar como anclado algo que no esté en el contrato |
+
+### 2.2 El flujo de punta a punta
+
+```
+ ① ALTA DEL LABORATORIO           Administrador ──add_lab──► Contrato
+          │
+          ▼
+ ② CERTIFICACIÓN                  Laboratorio (analista)
+   muestra → análisis físico →    registra lote + análisis + PDF en el portal
+                                   │  servidor: registro canónico → SHA-256 (huella)
+                                   ▼
+                                  Freighter (wallet del laboratorio) firma
+                                   │  submit_analysis(hash, pureza, dueño…)
+                                   ▼
+                                  Contrato guarda la huella ──► lote CERTIFICADO
+                                  Portal genera el QR para pegar en el lote
+          │
+          │   (si hubo un error) ③ CORRECCIÓN: supervisor registra la versión 2,
+          │                         enlazada a la 1; se firma igual. La 1 nunca se borra.
+          ▼
+ ④ VERIFICACIÓN (en cualquier momento, por cualquiera)
+   QR o código → el servidor recalcula la huella con los datos actuales
+   → la compara con la del contrato → ÍNTEGRO o ALTERADO
+          │
+          ▼
+ ⑤ PUBLICACIÓN                    Dueño ──list_batch(precio)──► Contrato ──► EN VENTA
+          │                       (la venta copia la pureza certificada)
+          ▼
+ ⑥ COMPRA                         Comprador ──buy──► paga el precio AL CONTRATO ──► EN GARANTÍA
+          │                       (vence en 7 días)
+          ▼
+ ⑦ CONTROL (opcional)             Laboratorio de contraste ──counter_analysis──►
+          │                         diferencia ≤ 2,00 → sigue EN GARANTÍA
+          │                         diferencia > 2,00 → EN DISPUTA
+          ▼
+ ⑧ CIERRE
+   ┌─ sin disputa: comprador ──confirm──► el contrato paga al vendedor ──► VENDIDO (dueño = comprador)
+   ├─ sin respuesta del comprador en 7 días: vendedor ──claim──► cobra ──► VENDIDO
+   └─ en disputa: comprador ──refund──► recupera su dinero; el lote queda bloqueado
+                  → el laboratorio certificador reanaliza (nueva versión) → vuelve a CERTIFICADO
+          │
+          ▼
+ ⑨ REVENTA                        El nuevo dueño puede publicarlo otra vez (vuelve a ⑤)
+```
+
+### 2.3 Estados de un lote en el contrato
+
+```
+                    list_batch               buy
+   CERTIFICADO ─────────────────► EN VENTA ───────► EN GARANTÍA ──confirm / claim──► VENDIDO
+        ▲                                                │                              │
+        │                                  counter_analysis                       list_batch
+        │                                  fuera de tolerancia                    (reventa)
+        │                                                ▼                              │
+        └── nuevo análisis del laboratorio ◄── refund ── EN DISPUTA                     ▼
+            certificador                                                            EN VENTA
+```
+
+### 2.4 Quién hace cada paso, dónde y con qué firma
+
+| # | Paso | Rol | Dónde en la app | Cuenta en Freighter | Función del contrato | Resultado |
+|---|---|---|---|---|---|---|
+| 1 | Autorizar laboratorio | Administrador | Consola (`npm run contrato:desplegar`) | `admin` | `add_lab` | El laboratorio puede certificar |
+| 2 | Registrar lote y análisis | Analista | Laboratorio → **Registrar análisis** | — | — | Guardado como *pendiente* |
+| 3 | Firmar y anclar | Analista o supervisor | Detalle del análisis → **Firmar y anclar** | `lab-a` (o `lab-b`) | `submit_analysis` | **Certificado**; QR disponible |
+| 4 | Corregir | Supervisor | Detalle → **Registrar corrección** | `lab-a` | `submit_analysis` (v2) | Versión nueva enlazada |
+| 5 | Verificar | Cualquiera | **Verificar** / QR | — | lectura (`get_analysis`, `is_lab`) | Íntegro o alterado |
+| 6 | Publicar | Dueño | **Mis lotes** → Publicar | `vendedor` | `list_batch` | **En venta** |
+| 7 | Comprar | Comprador | **Mercado** → lote → Comprar | `comprador` | `buy` | **En garantía**; dinero en el contrato |
+| 8 | Contra-análisis | Otro laboratorio | Laboratorio → **Contra-análisis** | `lab-b` | `counter_analysis` | Sigue en garantía o **en disputa** |
+| 9a | Confirmar | Comprador | **Mis lotes** → Confirmar | `comprador` | `confirm` | **Vendido**; el vendedor cobra |
+| 9b | Reembolso | Comprador | **Mis lotes** → Pedir reembolso | `comprador` | `refund` | Dinero devuelto; lote bloqueado |
+| 9c | Cobro por vencimiento | Vendedor | **Mis lotes** → Cobrar | `vendedor` | `claim` | **Vendido** |
+| 10 | Desbloquear tras disputa | Laboratorio certificador | Registrar análisis o corrección + firmar | `lab-a` | `submit_analysis` | Vuelve a **Certificado** |
+
+### 2.5 El recorrido del dinero
+
+```
+            buy                         confirm  o  claim
+Comprador ───────► CONTRATO (garantía) ─────────────────► Vendedor
+    ▲                     │
+    └──────── refund ─────┘   (solo si hay disputa por contra-análisis)
+```
+
+Nadie, ni MinerTrace ni el administrador, puede sacar el dinero del contrato por otro camino.
+
+### 2.6 Qué pasa si alguien hace trampa
+
+| Intento | Qué lo impide | Qué se ve |
+|---|---|---|
+| Alguien con acceso a la base de datos cambia 75 % por 95 % | La huella recalculada ya no coincide con la del contrato | **Registro alterado** en la verificación pública |
+| Se reemplaza el PDF del informe | El SHA-256 del PDF forma parte de la huella | "El informe PDF fue reemplazado o modificado" |
+| El laboratorio quiere "editar" un resultado ya registrado | El contrato no permite sobrescribir versiones | Solo puede publicar una corrección, que queda visible en el historial |
+| Un laboratorio no autorizado (o revocado) registra análisis | `require_auth` + lista de laboratorios del contrato | El contrato lo rechaza; los análisis de un laboratorio revocado dejan de valer para vender |
+| El laboratorio midió mal (o mintió) desde el inicio | El contra-análisis de otro laboratorio | **En disputa**: el comprador recupera su dinero |
+| El vendedor quiere cobrar sin entregar | El dinero está en el contrato | Solo cobra cuando el comprador confirma, o a los 7 días si no hubo disputa |
+| El comprador recibe y no confirma nunca | Plazo de garantía | A los 7 días el vendedor cobra con `claim` |
+| Alguien quiere firmar en nombre de otro | Cada operación exige la firma de la wallet correspondiente | La transacción no se acepta |
+
+---
+
+## 3. Qué es real y qué es de prueba
 
 | Elemento | ¿Real? | Detalle |
 |---|---|---|
@@ -63,7 +179,7 @@ contrato allí y usar dinero real (por ejemplo USDC); el código no cambia.
 
 ---
 
-## 3. Arrancar la aplicación
+## 4. Arrancar la aplicación
 
 Requisitos: Node.js 22+, el [Stellar CLI](https://developers.stellar.org/docs/tools/cli/install-cli) y Freighter
 en el navegador. Desde la carpeta del proyecto, en Git Bash:
@@ -90,7 +206,7 @@ La configuración simulada anterior quedó en `server/.env.mock` y su base en `s
 
 ---
 
-## 4. Roles y credenciales
+## 5. Credenciales y cuentas
 
 ### Usuarios del portal del laboratorio (correo + contraseña)
 
@@ -130,7 +246,7 @@ la cuenta `lab-a`; la app avisa si conectas otra.
 
 ---
 
-## 5. Conectar la wallet (Freighter)
+## 6. Conectar la wallet (Freighter)
 
 1. Instala la extensión **Freighter** desde [freighter.app](https://www.freighter.app/) (Chrome, Brave, Firefox o Edge)
    y crea una wallet con una contraseña local (o desbloquea la existente).
@@ -149,7 +265,7 @@ debe registrar un lote poniendo esa dirección como dueño.
 
 ---
 
-## 6. Cada vista: acceso y funciones
+## 7. Cada vista: acceso y funciones
 
 La barra superior siempre muestra: **Verificar · Mercado · Mis lotes · Laboratorio · [wallet]**.
 Al iniciar sesión como laboratorio aparece una segunda barra: **Panel · Registrar análisis · Contra-análisis**.
@@ -211,7 +327,7 @@ Al iniciar sesión como laboratorio aparece una segunda barra: **Panel · Regist
 
 ### 6.7 Login del laboratorio — `/laboratorio/login`
 - **Acceso:** menú **Laboratorio** (si no hay sesión, redirige aquí).
-- **Funciones:** correo y contraseña (ver sección 4). En desarrollo muestra los usuarios de prueba.
+- **Funciones:** correo y contraseña (ver sección 5). En desarrollo muestra los usuarios de prueba.
 
 ### 6.8 Panel — `/laboratorio`
 - **Acceso:** menú **Laboratorio** o **Panel**. Requiere sesión.
@@ -249,7 +365,7 @@ Al iniciar sesión como laboratorio aparece una segunda barra: **Panel · Regist
 
 ---
 
-## 7. El contrato en Stellar
+## 8. El contrato en Stellar
 
 | Dato | Valor |
 |---|---|
@@ -297,7 +413,7 @@ registrada*, *El hash anterior no coincide*, *El lote está en disputa*, *Todav�
 
 ---
 
-## 8. Ver las transacciones en testnet
+## 9. Ver las transacciones en testnet
 
 Todo se ve en **[stellar.expert](https://stellar.expert/explorer/testnet)**, el explorador público de Stellar:
 
@@ -331,7 +447,7 @@ SHA-256 (`sha256sum archivo.json` o `certutil -hashfile archivo.json SHA256` en 
 
 ---
 
-## 9. Datos de la demo (19 lotes)
+## 10. Datos de la demo (19 lotes)
 
 El lote de ejemplo de la semilla más 18 creados con `npm run demo:poblar`. Dueño de todos: **vendedor**. Todos los análisis firmados dan **íntegro**.
 
@@ -359,7 +475,7 @@ El lote de ejemplo de la semilla más 18 creados con `npm run demo:poblar`. Due�
 
 ---
 
-## 10. Guiones para la demo
+## 11. Guiones para la demo
 
 Antes de empezar: `npm run dev`, Freighter en **Testnet** con las 4 cuentas importadas, y el navegador en
 http://localhost:5173.
@@ -398,7 +514,7 @@ La original nunca se borra.
 
 ---
 
-## 11. Arquitectura y tecnologías
+## 12. Arquitectura y tecnologías
 
 ```
 Navegador (React)                        Servidor (Node + Express)                 Stellar testnet
@@ -428,7 +544,7 @@ Freighter (firma) ◄──────── XDR ─────────┘
 
 ---
 
-## 12. Limitaciones y pendientes
+## 13. Limitaciones y pendientes
 
 | Tema | Estado |
 |---|---|
@@ -442,7 +558,7 @@ Freighter (firma) ◄──────── XDR ─────────┘
 
 ---
 
-## 13. Problemas frecuentes
+## 14. Problemas frecuentes
 
 | Síntoma | Causa | Solución |
 |---|---|---|
