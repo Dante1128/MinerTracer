@@ -135,7 +135,9 @@ export function Evidencia({ analisis }: { analisis: AnalisisVerificado }) {
         {v.anclaje && (
           <>
             <div>
-              <dt className="text-stone-500">Transacción ({v.anclaje.red === 'mock' ? 'simulada, Fase 1' : v.anclaje.red})</dt>
+              <dt className="text-stone-500">
+                Transacción {v.anclaje.red === 'simulada' ? '(simulada)' : `en Stellar ${v.anclaje.red}`}
+              </dt>
               <dd>
                 <Hash valor={v.anclaje.tx_id} etiqueta="ID de transacción" />
                 {v.anclaje.url_explorador && (
@@ -183,12 +185,15 @@ export function Evidencia({ analisis }: { analisis: AnalisisVerificado }) {
               # Windows: certutil -hashfile {archivo} SHA256
             </code>
           </li>
-          <li>Compare el resultado con el hash de la transacción en un explorador público de Stellar.</li>
+          <li>
+            Compare el resultado con el <code>hash</code> que registró el laboratorio en el contrato: aparece en los
+            argumentos de la transacción, en un explorador público de Stellar.
+          </li>
           <li>Opcional: calcule el SHA-256 del PDF y compárelo con el campo pdf_sha256 del registro canónico.</li>
         </ol>
         {analisis.estado_anclaje === 'anclado' && !v.anclaje?.url_explorador && (
           <p className="mt-3 text-xs text-stone-500">
-            Fase 1: el anclaje es simulado; el enlace al explorador de Stellar estará disponible en la Fase 2.
+            Este servidor usa el anclaje simulado: no hay una transacción pública que consultar.
           </p>
         )}
       </details>

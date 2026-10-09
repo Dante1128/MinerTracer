@@ -2,11 +2,13 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { api, ErrorApi, type Analisis, type Lote } from '../api.ts';
 import { CamposAnalisis, MensajeError, aFormData, datosIniciales } from '../componentes/CamposAnalisis.tsx';
+import { useInfoServidor } from '../infoServidor.ts';
 
-const LOTE_VACIO = { codigo: '', tipo_mineral: '', peso_kg: '', origen: '', coordenadas: '' };
+const LOTE_VACIO = { codigo: '', tipo_mineral: '', peso_kg: '', origen: '', coordenadas: '', dueno: '' };
 
 export function NuevoAnalisis() {
   const navegar = useNavigate();
+  const firmaWallet = useInfoServidor()?.firma_laboratorio === 'wallet';
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [loteId, setLoteId] = useState('');
   const [nuevoLote, setNuevoLote] = useState(LOTE_VACIO);
@@ -74,7 +76,9 @@ export function NuevoAnalisis() {
       </Link>
       <h1 className="mt-2 text-3xl font-bold tracking-tight">Registrar análisis</h1>
       <p className="mt-1 text-stone-600">
-        Al guardar, el sistema calcula la huella del análisis y la ancla automáticamente. No podrá modificarse después;
+        {firmaWallet
+          ? 'Al guardar, el sistema calcula la huella del análisis; después la firma con la wallet del laboratorio (Freighter) para anclarla en Stellar. No podrá modificarse después;'
+          : 'Al guardar, el sistema calcula la huella del análisis y la ancla automáticamente. No podrá modificarse después;'}
         las correcciones se registran como nuevas versiones.
       </p>
 
@@ -159,6 +163,24 @@ export function NuevoAnalisis() {
                 />
                 <MensajeError texto={erroresLote.origen} />
               </div>
+              <div className="sm:col-span-2">
+                <label className="etiqueta" htmlFor="dueno">
+                  Dirección Stellar del dueño (opcional)
+                </label>
+                <input
+                  id="dueno"
+                  className="campo font-mono"
+                  placeholder="G…"
+                  spellCheck={false}
+                  autoComplete="off"
+                  value={nuevoLote.dueno}
+                  onChange={(e) => setLote('dueno', e.target.value.trim())}
+                />
+                <p className="mt-1 text-xs text-stone-500">
+                  Cuenta que podrá vender el lote en el marketplace. Si la deja vacía, el lote queda a nombre del laboratorio.
+                </p>
+                <MensajeError texto={erroresLote.dueno} />
+              </div>
             </div>
           ) : (
             <div>
@@ -188,7 +210,7 @@ export function NuevoAnalisis() {
             Cancelar
           </Link>
           <button className="boton-primario" disabled={enviando}>
-            {enviando ? 'Registrando…' : 'Registrar y anclar'}
+            {enviando ? 'Registrando…' : firmaWallet ? 'Registrar y continuar a la firma' : 'Registrar y anclar'}
           </button>
         </div>
       </form>

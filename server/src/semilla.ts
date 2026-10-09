@@ -1,47 +1,90 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
+import { Keypair, StrKey } from '@stellar/stellar-sdk';
+import { variableSecreto } from './anclaje/AnclajeStellar.ts';
+import { config } from './config.ts';
 import type { Contexto, Usuario } from './contexto.ts';
 import { pdfSimple } from './pdfSimple.ts';
 import { registrarAnalisis, registrarLote } from './servicios/registro.ts';
 
 export const PASSWORD_DEMO = 'minertrace123';
 
-/** Clave pública con formato Stellar (G + 55 caracteres base32). En Fase 2 será una cuenta real de Testnet. */
-export function cuentaSimulada(semilla: string): string {
-  const alfabeto = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  const bytes = crypto.createHash('sha512').update(`minertrace-mock:${semilla}`).digest();
-  return 'G' + Array.from(bytes.subarray(0, 55), (b) => alfabeto[b % 32]).join('');
+const LABORATORIOS = [
+  {
+    id: 'LAB-001',
+    nombre: 'Laboratorio Minero Andino (demo)',
+    usuarios: [
+      ['analista@lab001.test', 'Ana Quispe', 'analista'],
+      ['supervisor@lab001.test', 'Carlos Mamani', 'supervisor'],
+    ],
+  },
+  {
+    id: 'LAB-002',
+    nombre: 'Laboratorio de Contraste del Sur (demo)',
+    usuarios: [
+      ['analista@lab002.test', 'Rosa Condori', 'analista'],
+      ['supervisor@lab002.test', 'Jorge Choque', 'supervisor'],
+    ],
+  },
+] as const;
+
+/**
+ * Cuenta Stellar de un laboratorio: la de su clave en STELLAR_SECRETO_<ID> o,
+ * si firma con su wallet, la indicada en STELLAR_CUENTA_<ID>. Sin ninguna (solo
+ * en modo mock) se deriva del ID una dirección válida que no existe en la red.
+ */
+export function cuentaLaboratorio(laboratorioId: string): string {
+  const secreto = config.stellar.secretos[laboratorioId];
+  if (secreto) return Keypair.fromSecret(secreto).publicKey();
+  const cuenta = config.stellar.cuentas[laboratorioId];
+  if (cuenta) {
+    if (!StrKey.isValidEd25519PublicKey(cuenta)) throw new Error(`La cuenta de ${laboratorioId} no es una dirección Stellar válida`);
+    return cuenta;
+  }
+  if (config.anclaje.proveedor === 'stellar') {
+    const variable = variableSecreto(laboratorioId).replace('SECRETO', 'CUENTA');
+    throw new Error(`Falta ${variable} (o ${variableSecreto(laboratorioId)}) para crear el laboratorio ${laboratorioId}`);
+  }
+  const semilla = crypto.createHash('sha256').update(`minertrace-mock:${laboratorioId}`).digest();
+  return Keypair.fromRawEd25519Seed(semilla).publicKey();
 }
 
-/** Crea el laboratorio, los usuarios y un lote de ejemplo si la base está vacía. */
+/** Crea los laboratorios, sus usuarios y un lote de ejemplo si la base está vacía. */
 export async function sembrar(ctx: Contexto, opciones: { lotesDemo?: boolean } = {}) {
   const [existe] = await ctx.db.query('SELECT 1 FROM laboratorios LIMIT 1');
   if (existe) return false;
 
-  await ctx.db.query(
-    `INSERT INTO laboratorios (id, nombre, cuenta_publica, acreditaciones) VALUES ($1, $2, $3, $4)`,
-    ['LAB-001', 'Laboratorio Minero Andino (demo)', cuentaSimulada('LAB-001'), JSON.stringify(['ISO/IEC 17025'])],
-  );
   const hash = await bcrypt.hash(PASSWORD_DEMO, 10);
-  const usuarios = await ctx.db.query<Usuario>(
-    `INSERT INTO usuarios (email, nombre, password_hash, rol, laboratorio_id) VALUES
-       ('analista@lab001.test', 'Ana Quispe', $1, 'analista', 'LAB-001'),
-       ('supervisor@lab001.test', 'Carlos Mamani', $1, 'supervisor', 'LAB-001')
-     RETURNING id, email, nombre, rol, laboratorio_id`,
-    [hash],
-  );
+  const usuarios: Usuario[] = [];
+  for (const lab of LABORATORIOS) {
+    await ctx.db.query(
+      `INSERT INTO laboratorios (id, nombre, cuenta_publica, acreditaciones) VALUES ($1, $2, $3, $4)`,
+      [lab.id, lab.nombre, cuentaLaboratorio(lab.id), JSON.stringify(['ISO/IEC 17025'])],
+    );
+    for (const [email, nombre, rol] of lab.usuarios) {
+      const [usuario] = await ctx.db.query<Usuario>(
+        `INSERT INTO usuarios (email, nombre, password_hash, rol, laboratorio_id) VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, email, nombre, rol, laboratorio_id`,
+        [email, nombre, hash, rol, lab.id],
+      );
+      usuarios.push(usuario);
+    }
+  }
 
   if (opciones.lotesDemo !== false) {
     // El ejemplo de MinerTrace.md, sección 13.
-    const analista = usuarios.find((u) => u.rol === 'analista')!;
+    const analista = usuarios.find((u) => u.email === 'analista@lab001.test')!;
     await registrarLote(ctx, analista, {
       codigo: 'LT-2026-0457',
       tipo_mineral: 'Concentrado de estaño',
       peso_kg: '12500.000',
       origen: 'Cooperativa Minera X, Potosí, Bolivia',
       coordenadas: '-19.583600,-65.753100',
+      dueno: config.stellar.duenoDemo,
     });
     const composicion = { Sn: '75.00', Pb: '4.10', Ag: '0.80', otros: '20.10' };
+    // La semilla la firma el servidor si tiene la clave del laboratorio; si no, espera su wallet.
+    const firmaServidor = Boolean(config.stellar.secretos['LAB-001']);
     await registrarAnalisis(
       ctx,
       analista,
@@ -57,6 +100,7 @@ export async function sembrar(ctx: Contexto, opciones: { lotesDemo?: boolean } =
           'Analista: Ana Quispe',
         ]),
       },
+      { firmaServidor },
     );
   }
   return true;

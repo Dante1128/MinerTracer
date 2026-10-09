@@ -13,7 +13,7 @@ export interface ResultadoVerificacion {
   comprobaciones: {
     /** Hash de los datos actuales = hash anclado. */
     datos: boolean | null;
-    /** La transacción la firmó la cuenta pública del laboratorio. */
+    /** Lo registró la cuenta del laboratorio y esa cuenta sigue autorizada (en el contrato, si existe). */
     firma: boolean | null;
     /** El PDF almacenado coincide con el pdf_sha256 del registro. */
     pdf: boolean;
@@ -65,7 +65,11 @@ export async function verificarAnalisis(ctx: Contexto, analisis: any, lote: any,
 
   let anclado;
   try {
-    anclado = await ctx.anclaje.consultarAnclaje(analisis.tx_id);
+    anclado = await ctx.anclaje.consultarAnclaje({
+      txId: analisis.tx_id,
+      analisisId: analisis.analisis_id,
+      version: analisis.version,
+    });
   } catch (error) {
     const noExiste = error instanceof AnclajeNoEncontrado;
     return {
@@ -84,9 +88,11 @@ export async function verificarAnalisis(ctx: Contexto, analisis: any, lote: any,
   }
 
   const datosOk = anclado.hash === hashRecalculado;
-  const firmaOk = anclado.cuenta === laboratorio.cuenta_publica;
+  const cuentaOk = anclado.cuenta === laboratorio.cuenta_publica;
+  const firmaOk = cuentaOk && anclado.cuentaAutorizada;
   if (!datosOk) motivos.push('Los datos actuales no corresponden a los anclados');
-  if (!firmaOk) motivos.push('La transacción no fue firmada por la cuenta del laboratorio');
+  if (!cuentaOk) motivos.push('El análisis no fue registrado por la cuenta del laboratorio');
+  if (!anclado.cuentaAutorizada) motivos.push('La cuenta que lo registró ya no está autorizada como laboratorio');
 
   const integro = datosOk && firmaOk && pdfOk;
   return {
@@ -101,7 +107,7 @@ export async function verificarAnalisis(ctx: Contexto, analisis: any, lote: any,
       cuenta: anclado.cuenta,
       cuenta_laboratorio: laboratorio.cuenta_publica,
       url_explorador: ctx.anclaje.urlExplorador(analisis.tx_id),
-      red: ctx.anclaje.nombre,
+      red: ctx.anclaje.red,
     },
   };
 }
@@ -125,11 +131,15 @@ export async function verificarLote(ctx: Contexto, loteId: string) {
     const verificacion = await verificarAnalisis(ctx, fila, lote, laboratorio);
     const versiones = grupos.get(fila.analisis_id) ?? [];
     const anterior = versiones.at(-1);
-    // Cada versión debe apuntar a la huella anclada de la anterior.
-    const enlaceOk = anterior
-      ? fila.hash_anterior === (anterior.verificacion.hash_anclado ?? anterior.hash)
-      : fila.hash_anterior === null;
-    if (!enlaceOk) {
+    // Cada versión debe apuntar a la huella ANCLADA de la anterior. Si la
+    // anterior aún no está anclada, el enlace no se puede comprobar: pendiente.
+    const huellaAnterior: string | null = anterior ? anterior.verificacion.hash_anclado : null;
+    if (anterior && huellaAnterior === null) {
+      if (verificacion.estado === 'integro') {
+        verificacion.estado = 'pendiente';
+        verificacion.motivos.push('La versión anterior aún no está anclada');
+      }
+    } else if (fila.hash_anterior !== huellaAnterior) {
       verificacion.estado = 'alterado';
       verificacion.motivos.push('La versión no está enlazada con la versión anterior');
     }
@@ -174,6 +184,7 @@ export function publico(fila: any) {
     hash_anterior: fila.hash_anterior,
     motivo_correccion: fila.motivo_correccion,
     estado_anclaje: fila.estado_anclaje,
+    firma_servidor: fila.firma_servidor,
     tx_id: fila.tx_id,
     fecha_anclaje: fila.fecha_anclaje,
     creado_en: fila.creado_en,

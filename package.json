@@ -2,13 +2,17 @@
   "name": "minertrace",
   "private": true,
   "scripts": {
-    "instalar": "npm install --prefix server && npm install --prefix web",
+    "instalar": "npm ci --prefix server && npm ci --prefix web",
     "dev": "node scripts/dev.mjs",
     "dev:server": "npm run dev --prefix server",
     "dev:web": "npm run dev --prefix web",
     "build": "npm run build --prefix web",
     "start": "npm run start --prefix server",
     "test": "npm test --prefix server",
-    "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix web"
+    "test:testnet": "npm run test:testnet --prefix server",
+    "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix web",
+    "contrato:test": "cargo test --manifest-path contracts/minertrace/Cargo.toml",
+    "contrato:build": "stellar contract build --manifest-path contracts/minertrace/Cargo.toml",
+    "contrato:desplegar": "node scripts/desplegar-testnet.mjs"
   }
 }

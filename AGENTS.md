@@ -6,8 +6,9 @@ y el arranque para personas en [README.md](README.md).
 ## Qué es
 
 Trazabilidad e integridad de análisis minerales. Cada análisis se convierte en un registro canónico
-(JCS, RFC 8785), se hashea con SHA-256 y el hash se ancla en una blockchain. En la Fase 1 el anclaje
-está **simulado** (`AnclajeMock`); Stellar llega en la Fase 2 (busque `TODO WEB3`).
+(JCS, RFC 8785), se hashea con SHA-256 y el hash se ancla en una blockchain. Con `ANCLAJE=mock` el anclaje
+está **simulado** (`AnclajeMock`); con `ANCLAJE=stellar` se registra en el contrato Soroban de testnet
+(`AnclajeStellar`).
 
 ## Estructura
 
@@ -18,6 +19,8 @@ Dos paquetes independientes, cada uno con su `package.json` y `node_modules`:
 - `web/` — frontend: React 19, Vite, Tailwind 4, React Router, PWA.
 - `package.json` raíz — solo scripts que delegan en `server/` y `web/`.
 - `scripts/dev.mjs` — lanza ambos en paralelo.
+- `contracts/minertrace/` — contrato Soroban (Rust, `soroban-sdk` 28): laboratorios, análisis versionados
+  y marketplace con garantía. `scripts/desplegar-testnet.mjs` lo despliega en testnet.
 
 En desarrollo Vite (puerto 5173) redirige `/api` a la API en el puerto 3000. En producción la API sirve `web/dist`.
 
@@ -29,9 +32,13 @@ npm run dev          # API :3000 + web :5173
 npm test             # pruebas del servidor (node:test + PGlite en memoria)
 npm run typecheck    # tsc en server/ y web/
 npm run build        # compila web/dist
+npm run contrato:test       # cargo test del contrato
+npm run contrato:desplegar  # cuentas de prueba + despliegue en testnet
+npm run test:testnet        # integración contra el contrato en testnet (requiere variables STELLAR_*)
 ```
 
-Antes de dar un cambio por terminado, ejecute `npm run typecheck` y `npm test`.
+Antes de dar un cambio por terminado, ejecute `npm run typecheck` y `npm test`
+(y `npm run contrato:test` si tocó el contrato).
 
 ## Convenciones
 
@@ -55,14 +62,33 @@ Antes de dar un cambio por terminado, ejecute `npm run typecheck` y `npm test`.
   (`servicios/verificacion.ts`). No introduzca atajos que lean el hash almacenado.
 - **No cambie el formato del registro canónico** (`integridad/canonico.ts`) sin versionarlo: invalidaría
   todos los hashes ya anclados.
-- La interfaz `ServicioAnclaje` es fija; los proveedores nuevos se registran en `server/src/anclaje/index.ts`.
+- La interfaz `ServicioAnclaje` es el único punto de contacto con la blockchain; los proveedores se registran
+  en `server/src/anclaje/index.ts`. `consultarAnclaje` lee el contrato por `(analisis_id, version)`, no la base de datos.
+- Con `ANCLAJE=stellar`, `firma` en la verificación exige que la cuenta registrada en el contrato sea la del
+  laboratorio **y** que siga autorizada (`is_lab`). Los códigos de error del contrato están en
+  `server/src/anclaje/erroresContrato.ts`; manténgalos sincronizados con `contracts/minertrace/src/lib.rs`.
+- Nunca suba claves `STELLAR_SECRETO_*`: van en `server/.env` (ignorado) o en el entorno.
+- Marketplace (`server/src/mercado/`, rutas `/api/mercado` y `/api/contra-analisis`): el estado comercial se lee
+  siempre del contrato; `eventos_contrato` (indexador) solo alimenta la línea de tiempo. Las wallets firman en el
+  navegador con Freighter (`web/src/wallet.tsx`); el servidor arma la transacción sin firmar y la envía después,
+  comprobando que sea la invocación pedida al contrato y desde la cuenta esperada.
+- Firma del laboratorio (`FIRMA_LABORATORIO=wallet`, por defecto): el portal firma `submit_analysis` y
+  `counter_analysis` con Freighter; el servidor arma la transacción, la envía y marca `anclado` solo tras leer
+  el contrato. El procesador solo reconcilia esos análisis (`buscarAnclaje`); firma únicamente los que tienen
+  `firma_servidor` (semilla y pruebas). No reintroduzca la firma en el servidor para el portal.
+- Garantía con plazo: `buy` fija `vence_garantia`; vencido el plazo sin confirmación ni disputa, el vendedor
+  cobra con `claim`. Cambiar el contrato exige volver a desplegarlo (no tiene función de actualización).
+- `npm run test:testnet` corre con `--test-concurrency=1`: dos pruebas firmando con la misma cuenta a la vez
+  chocan en el número de secuencia de Stellar.
 - El endpoint `/api/demo` (simular fraude) solo existe con `DEMO_ALTERAR=true` y nunca en producción.
 - `JWT_SECRET` es obligatorio en producción.
 
 ## Datos de ejemplo
 
-`server/src/semilla.ts` crea el lote `LT-2026-0457` y los usuarios `analista@lab001.test` y
-`supervisor@lab001.test` (contraseña `minertrace123`). Para reiniciar PGlite, borre `server/datos/`.
+`server/src/semilla.ts` crea los laboratorios `LAB-001` y `LAB-002`, el lote `LT-2026-0457` y los usuarios
+`analista@lab001.test`, `supervisor@lab001.test`, `analista@lab002.test` y `supervisor@lab002.test`
+(contraseña `minertrace123`). Para reiniciar PGlite, borre `server/datos/`; con `ANCLAJE=stellar`, despliegue
+además un contrato nuevo (los `analisis_id` de la base nueva ya existirían en el contrato anterior).
 
 ## Git
 

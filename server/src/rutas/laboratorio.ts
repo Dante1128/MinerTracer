@@ -1,9 +1,12 @@
 import bcrypt from 'bcryptjs';
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import multer from 'multer';
+import { ErrorContrato, VERSION_DUPLICADA } from '../anclaje/erroresContrato.ts';
+import { marcarAnclado, solicitudDeAnalisis } from '../anclaje/procesador.ts';
 import { firmarToken, requiereSesion, usuarioDe } from '../auth.ts';
 import { config } from '../config.ts';
 import { ErrorHttp, type Contexto, type Usuario } from '../contexto.ts';
+import { validarCuenta } from '../mercado/mercado.ts';
 import { registrarAnalisis, registrarCorreccion, registrarLote, type PdfSubido } from '../servicios/registro.ts';
 import { publico, verificarAnalisis } from '../servicios/verificacion.ts';
 import { validarAnalisis, validarLote, validarMotivo } from '../validacion.ts';
@@ -103,6 +106,52 @@ export function rutasLaboratorio(ctx: Contexto) {
     const loteId = String(req.body?.lote_id ?? '');
     const fila = await registrarAnalisis(ctx, usuarioDe(req), loteId, datos, pdfDe(req.file));
     res.status(201).json(publico(fila));
+  });
+
+  /**
+   * Análisis pendiente que debe firmar la wallet del laboratorio conectada:
+   * debe ser del laboratorio del usuario, estar pendiente y no ser de firma en el servidor.
+   */
+  async function paraFirmar(req: Request, cuenta: string) {
+    if (!ctx.anclaje.firmaConWallet) throw new ErrorHttp(409, 'Este servidor firma los análisis por su cuenta (FIRMA_LABORATORIO=servidor)');
+    const usuario = usuarioDe(req);
+    const [fila] = await ctx.db.query(
+      'SELECT * FROM analisis WHERE analisis_id = $1 AND version = $2 AND laboratorio_id = $3',
+      [req.params.analisisId, Number.parseInt(String(req.params.version), 10) || 0, usuario.laboratorio_id],
+    );
+    if (!fila) throw new ErrorHttp(404, 'Análisis no encontrado');
+    if (fila.estado_anclaje !== 'pendiente') throw new ErrorHttp(409, 'El análisis ya está anclado');
+    if (fila.firma_servidor) throw new ErrorHttp(409, 'Este análisis lo ancla el servidor');
+    const solicitud = await solicitudDeAnalisis(ctx.db, fila);
+    if (cuenta !== solicitud.cuentaLaboratorio) {
+      throw new ErrorHttp(403, `Conecte en Freighter la cuenta del laboratorio (${solicitud.cuentaLaboratorio})`);
+    }
+    return { fila, solicitud };
+  }
+
+  /** Transacción sin firmar para que el laboratorio la firme con su wallet. */
+  r.post('/analisis/:analisisId/v/:version/firma', async (req, res) => {
+    const { fila, solicitud } = await paraFirmar(req, validarCuenta(req.body?.cuenta));
+    try {
+      res.json({ xdr: await ctx.anclaje.prepararAnclaje(solicitud) });
+    } catch (error) {
+      // Ya estaba en el contrato (firmado antes, desde otro navegador): se reconcilia.
+      if (!(error instanceof ErrorContrato && error.codigo === VERSION_DUPLICADA)) throw error;
+      const encontrado = await ctx.anclaje.buscarAnclaje(solicitud);
+      if (!encontrado) throw error;
+      await marcarAnclado(ctx.db, fila.id, encontrado);
+      res.json({ ya_anclado: true, tx_id: encontrado.txId });
+    }
+  });
+
+  /** Envía la transacción firmada; marca el análisis como anclado solo si el contrato lo tiene. */
+  r.post('/analisis/:analisisId/v/:version/firma/enviar', async (req, res) => {
+    const { fila, solicitud } = await paraFirmar(req, validarCuenta(req.body?.cuenta));
+    const xdr = String(req.body?.xdr ?? '');
+    if (!xdr) throw new ErrorHttp(400, 'Falta la transacción firmada');
+    const resultado = await ctx.anclaje.enviarAnclaje(solicitud, xdr);
+    await marcarAnclado(ctx.db, fila.id, resultado);
+    res.json({ tx_id: resultado.txId, fecha: resultado.fecha, url_explorador: ctx.anclaje.urlExplorador(resultado.txId) });
   });
 
   r.post('/analisis/:analisisId/versiones', subida.single('pdf'), async (req, res) => {

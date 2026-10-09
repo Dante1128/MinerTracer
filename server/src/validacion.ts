@@ -1,3 +1,5 @@
+import { StrKey } from '@stellar/stellar-sdk';
+
 /**
  * Validación y normalización de entradas. Todo lo que entra al registro
  * canónico sale de aquí con formato fijo (decimales como texto, fechas ISO UTC),
@@ -55,6 +57,8 @@ export interface LoteValidado {
   peso_kg: string;
   origen: string;
   coordenadas: string | null;
+  /** Cuenta Stellar (G...) del dueño; sin ella, el lote queda a nombre del laboratorio. */
+  dueno: string | null;
 }
 
 export function validarLote(entrada: Entrada): LoteValidado {
@@ -80,8 +84,12 @@ export function validarLote(entrada: Entrada): LoteValidado {
       coordenadas = `${lat.toFixed(6)},${lon.toFixed(6)}`;
     }
   }
+  const dueno = v.texto(entrada, 'dueno', { max: 56, opcional: true }).toUpperCase();
+  if (dueno && !StrKey.isValidEd25519PublicKey(dueno)) {
+    v.errores.dueno = 'Dirección Stellar inválida (empieza con G y tiene 56 caracteres)';
+  }
   v.lanzarSiHayErrores();
-  return { codigo: codigoCrudo || null, tipo_mineral, peso_kg, origen, coordenadas };
+  return { codigo: codigoCrudo || null, tipo_mineral, peso_kg, origen, coordenadas, dueno: dueno || null };
 }
 
 export interface AnalisisValidado {

@@ -14,6 +14,8 @@ export interface Lote {
   peso_kg: string;
   origen: string;
   coordenadas: string | null;
+  /** Cuenta Stellar del dueño indicada al registrar el lote (null: a nombre del laboratorio). */
+  dueno?: string | null;
   creado_en: string;
   total_analisis?: number;
 }
@@ -35,6 +37,8 @@ export interface Analisis {
   hash_anterior: string | null;
   motivo_correccion: string | null;
   estado_anclaje: 'pendiente' | 'anclado';
+  /** La firma el servidor (semilla); si no, la firma el laboratorio con su wallet. */
+  firma_servidor?: boolean;
   tx_id: string | null;
   fecha_anclaje: string | null;
   creado_en: string;
@@ -71,6 +75,11 @@ export interface ResultadoLote {
 
 export interface InfoServidor {
   anclaje: string;
+  /** "simulada" (ANCLAJE=mock) o "testnet". */
+  red: string;
+  contrato_id: string | null;
+  /** "wallet": el laboratorio firma sus análisis con Freighter. */
+  firma_laboratorio: 'wallet' | 'servidor';
   motor_db: string;
   demo_alterar: boolean;
 }
