@@ -3,7 +3,8 @@
 Todo lo construido hasta ahora: qué hace el sistema, cada vista y sus funciones, credenciales, cómo conectar
 una wallet, cómo ver las transacciones en Stellar testnet, el contrato, y guiones para la demo.
 
-> El diseño original está en [MinerTrace.md](MinerTrace.md) y la instalación en [README.md](README.md).
+> El diseño original está en [MinerTrace.md](MinerTrace.md), la instalación en [README.md](README.md) y la explicación
+> técnica de la capa blockchain en [TECNICO.md](TECNICO.md).
 
 ## Índice
 
