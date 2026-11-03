@@ -1,13 +1,17 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { api, ErrorApi, type Analisis, type Lote } from '../api.ts';
 import { CamposAnalisis, MensajeError, aFormData, datosIniciales } from '../componentes/CamposAnalisis.tsx';
 import { useInfoServidor } from '../infoServidor.ts';
+import { FirmaAnalisis } from '../componentes/FirmaLaboratorio.tsx';
 
 const LOTE_VACIO = { codigo: '', tipo_mineral: '', peso_kg: '', origen: '', coordenadas: '', dueno: '' };
 
 export function NuevoAnalisis() {
   const navegar = useNavigate();
+  const [parametros] = useSearchParams();
+  const [creado, setCreado] = useState<Analisis | null>(null);
+  const [cargandoLotes, setCargandoLotes] = useState(true);
   const firmaWallet = useInfoServidor()?.firma_laboratorio === 'wallet';
   const [lotes, setLotes] = useState<Lote[]>([]);
   const [loteId, setLoteId] = useState('');
@@ -23,13 +27,18 @@ export function NuevoAnalisis() {
     api<Lote[]>('/lotes')
       .then((l) => {
         setLotes(l);
+        const solicitado = parametros.get('lote');
+        if (solicitado && l.some((lote) => lote.id === solicitado)) setLoteId(solicitado);
+        else if (l.length === 1) setLoteId(l[0]!.id);
         if (l.length === 0) setCrearLote(true);
       })
-      .catch(() => setCrearLote(true));
+      .catch(() => setMensaje('No se pudieron cargar los lotes. Recargue la página para reintentar.'))
+      .finally(() => setCargandoLotes(false));
   }, []);
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault();
+    if (enviando || cargandoLotes) return;
     setEnviando(true);
     setErrores({});
     setErroresLote({});
@@ -54,7 +63,8 @@ export function NuevoAnalisis() {
       const form = aFormData(datos);
       form.set('lote_id', destino);
       const creado = await api<Analisis>('/analisis', { form });
-      navegar(`/laboratorio/analisis/${creado.analisis_id}`);
+      if (firmaWallet) setCreado(creado);
+      else navegar(`/laboratorio/analisis/${creado.analisis_id}`);
     } catch (err) {
       if (err instanceof ErrorApi) {
         setMensaje(err.message);
@@ -68,6 +78,15 @@ export function NuevoAnalisis() {
   };
 
   const setLote = (campo: keyof typeof LOTE_VACIO, valor: string) => setNuevoLote({ ...nuevoLote, [campo]: valor });
+
+  if (creado) return (
+    <div className="mx-auto max-w-3xl space-y-6 px-4 py-10">
+      <h1 className="text-3xl font-bold">Análisis guardado</h1>
+      <p role="status">Solo falta la firma del laboratorio para completar el registro. Puede retomarla desde el panel si sale.</p>
+      <FirmaAnalisis analisis={creado} alTerminar={() => navegar(`/laboratorio/analisis/${creado.analisis_id}`)} />
+      <Link className="boton-secundario" to={`/laboratorio/analisis/${creado.analisis_id}`}>Ver análisis y continuar después</Link>
+    </div>
+  );
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
@@ -209,7 +228,7 @@ export function NuevoAnalisis() {
           <Link to="/laboratorio" className="boton-secundario">
             Cancelar
           </Link>
-          <button className="boton-primario" disabled={enviando}>
+          <button className="boton-primario" disabled={enviando || cargandoLotes}>
             {enviando ? 'Registrando…' : firmaWallet ? 'Registrar y continuar a la firma' : 'Registrar y anclar'}
           </button>
         </div>
