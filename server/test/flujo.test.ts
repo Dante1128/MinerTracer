@@ -56,6 +56,20 @@ after(async () => {
   fs.rmSync(dirTemporal, { recursive: true, force: true });
 });
 
+test('las respuestas privadas no se almacenan y el navegador recibe protección', async () => {
+  const respuesta = await fetch(`${base}/api/auth/yo`);
+  assert.equal(respuesta.status, 401);
+  assert.equal(respuesta.headers.get('cache-control'), 'no-store');
+  assert.equal(respuesta.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(respuesta.headers.get('x-frame-options'), 'DENY');
+  assert.match(respuesta.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
+});
+
+test('el acceso rechaza credenciales mal formadas y cuerpos demasiado grandes', async () => {
+  assert.equal((await api('/api/auth/login', { method: 'POST', json: { email: {}, password: [] } })).estado, 401);
+  assert.equal((await api('/api/auth/login', { method: 'POST', json: { email: 'a@b.test', password: 'a'.repeat(110_000) } })).estado, 413);
+});
+
 test('flujo completo: registro → anclaje → verificación → fraude detectado', async () => {
   const token = await login('analista@lab001.test');
   assert.ok(token);

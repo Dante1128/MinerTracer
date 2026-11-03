@@ -17,7 +17,8 @@ export function requiereSesion(req: Request, _res: Response, next: NextFunction)
   const [tipo, token] = (req.headers.authorization ?? '').split(' ');
   if (tipo !== 'Bearer' || !token) throw new ErrorHttp(401, 'Inicie sesión');
   try {
-    const datos = jwt.verify(token, config.jwtSecret) as Usuario & jwt.JwtPayload;
+    const datos = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] }) as Usuario & jwt.JwtPayload;
+    if (!Number.isSafeInteger(datos.id) || datos.id <= 0 || !['analista', 'supervisor'].includes(datos.rol) || typeof datos.laboratorio_id !== 'string') throw new Error('Token inválido');
     req.usuario = {
       id: datos.id,
       email: datos.email,

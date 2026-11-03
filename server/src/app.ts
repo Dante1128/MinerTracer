@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import { config } from './config.ts';
+import { cabecerasSeguras } from './seguridad.ts';
 import { ErrorContrato } from './anclaje/erroresContrato.ts';
 import { ErrorHttp, type Contexto } from './contexto.ts';
 import { rutasContraAnalisis } from './rutas/contraAnalisis.ts';
@@ -17,6 +18,7 @@ import { ErrorValidacion } from './validacion.ts';
 export function crearApp(ctx: Contexto) {
   const app = express();
   app.disable('x-powered-by');
+  app.use(cabecerasSeguras);
   app.use(express.json({ limit: '100kb' }));
 
   app.use('/api/publico', rutasPublicas(ctx));
@@ -50,6 +52,8 @@ export function crearApp(ctx: Contexto) {
     } else if (error instanceof multer.MulterError) {
       const mensaje = error.code === 'LIMIT_FILE_SIZE' ? 'El PDF supera el tamaño máximo (20 MB)' : error.message;
       res.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: mensaje });
+    } else if ((error as { type?: string })?.type === 'entity.too.large') {
+      res.status(413).json({ error: 'La solicitud supera el tamaño máximo permitido' });
     } else if ((error as { type?: string })?.type === 'entity.parse.failed') {
       res.status(400).json({ error: 'JSON inválido' });
     } else {

@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { limitarAcceso } from '../seguridad.ts';
 import { Router, type Request } from 'express';
 import multer from 'multer';
 import { ErrorContrato, VERSION_DUPLICADA } from '../anclaje/erroresContrato.ts';
@@ -19,8 +20,11 @@ const pdfDe = (archivo: Express.Multer.File | undefined): PdfSubido | null =>
 export function rutasLaboratorio(ctx: Contexto) {
   const r = Router();
 
-  r.post('/auth/login', async (req, res) => {
+  r.post('/auth/login', limitarAcceso(), async (req, res) => {
     const { email, password } = req.body ?? {};
+    if (typeof email !== 'string' || typeof password !== 'string' || email.length > 254 || !password || Buffer.byteLength(password, 'utf8') > 72) {
+      throw new ErrorHttp(401, 'Correo o contraseña incorrectos');
+    }
     const [fila] = await ctx.db.query('SELECT * FROM usuarios WHERE email = $1', [String(email ?? '').trim().toLowerCase()]);
     if (!fila || !(await bcrypt.compare(String(password ?? ''), fila.password_hash))) {
       throw new ErrorHttp(401, 'Correo o contraseña incorrectos');
@@ -36,6 +40,12 @@ export function rutasLaboratorio(ctx: Contexto) {
   });
 
   r.use(['/auth/yo', '/lotes', '/analisis'], requiereSesion);
+  r.use(['/auth/yo', '/lotes', '/analisis'], async (req, _res, next) => {
+    const [actual] = await ctx.db.query<Usuario>('SELECT id, email, nombre, rol, laboratorio_id FROM usuarios WHERE id = $1', [usuarioDe(req).id]);
+    if (!actual) throw new ErrorHttp(401, 'La cuenta ya no tiene acceso');
+    req.usuario = actual;
+    next();
+  });
 
   r.get('/auth/yo', async (req, res) => {
     const usuario = usuarioDe(req);

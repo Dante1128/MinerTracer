@@ -13,7 +13,7 @@ const procesador = new ProcesadorAnclajes(db, anclaje);
 const mercado = config.anclaje.proveedor === 'stellar' ? new Mercado(db, config.stellar.rpcUrl, config.stellar.contratoId) : null;
 const ctx = { db, anclaje, procesador, mercado };
 
-if (await sembrar(ctx)) {
+if (!config.produccion && await sembrar(ctx)) {
   console.log(
     `[semilla] Usuarios de prueba: analista@lab001.test, supervisor@lab001.test, analista@lab002.test, supervisor@lab002.test (contraseña: ${PASSWORD_DEMO})`,
   );

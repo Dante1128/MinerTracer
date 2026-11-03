@@ -52,3 +52,10 @@ export const config = {
 if (produccion && config.jwtSecret === 'solo-para-desarrollo-cambiar') {
   throw new Error('JWT_SECRET es obligatorio en producción');
 }
+
+if (produccion && (config.jwtSecret.length < 32 || config.jwtSecret.startsWith('cambie-esto'))) {
+  throw new Error('JWT_SECRET debe tener al menos 32 caracteres aleatorios en producción');
+}
+if (produccion && config.stellar.firmaLaboratorio === 'servidor') {
+  throw new Error('En producción los laboratorios deben firmar con su wallet');
+}
