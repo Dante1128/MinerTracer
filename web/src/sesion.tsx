@@ -1,40 +1,57 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { api, onSesionExpirada, token, type Usuario } from './api.ts';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { api, onSesionExpirada, type RespuestaSesion, type Usuario } from './api.ts';
 
 interface Sesion {
   usuario: Usuario | null;
   cargando: boolean;
   entrar: (email: string, password: string) => Promise<void>;
-  salir: () => void;
+  salir: () => Promise<void>;
+  olvidar: (mensaje?: string) => void;
+  aviso: string;
 }
 
 const ContextoSesion = createContext<Sesion | null>(null);
 
 export function ProveedorSesion({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
-  const [cargando, setCargando] = useState(() => token.leer() !== null);
+  const [cargando, setCargando] = useState(true);
+  const [aviso, setAviso] = useState('');
+  const revision = useRef(0);
 
-  const salir = () => {
-    token.guardar(null);
+  const olvidar = (mensaje = '') => {
+    revision.current++;
     setUsuario(null);
+    setAviso(mensaje);
+    setCargando(false);
+  };
+
+  const salir = async () => {
+    await api('/auth/salir', { json: {} });
+    olvidar();
   };
 
   useEffect(() => {
-    onSesionExpirada(salir);
-    if (!token.leer()) return;
-    api<{ usuario: Usuario }>('/auth/yo')
-      .then((r) => setUsuario(r.usuario))
-      .catch(salir)
-      .finally(() => setCargando(false));
+    // Elimina las credenciales del portal anterior; la cookie HttpOnly es la única sesión.
+    try { localStorage.removeItem('minertrace.token'); } catch { /* Almacenamiento no disponible. */ }
+    onSesionExpirada(olvidar);
+    let vigente = true;
+    const iniciada = revision.current;
+    api<{ usuario: Usuario }>('/auth/yo', { notificarSesion: false })
+      .then((r) => { if (vigente && revision.current === iniciada) setUsuario(r.usuario); })
+      .catch(() => { if (vigente && revision.current === iniciada) olvidar(); })
+      .finally(() => { if (vigente) setCargando(false); });
+    return () => { vigente = false; };
   }, []);
 
   const entrar = async (email: string, password: string) => {
-    const r = await api<{ token: string; usuario: Usuario }>('/auth/login', { json: { email, password } });
-    token.guardar(r.token);
+    const r = await api<RespuestaSesion>('/auth/login', { json: { email, password } });
+    revision.current++;
     setUsuario(r.usuario);
+    setAviso('');
+    setCargando(false);
   };
 
-  return <ContextoSesion.Provider value={{ usuario, cargando, entrar, salir }}>{children}</ContextoSesion.Provider>;
+  return <ContextoSesion.Provider value={{ usuario, cargando, entrar, salir, olvidar, aviso }}>{children}</ContextoSesion.Provider>;
 }
 
 export function useSesion(): Sesion {

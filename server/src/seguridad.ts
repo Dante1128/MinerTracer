@@ -1,22 +1,29 @@
 import type { RequestHandler } from 'express';
+import { createHmac } from 'node:crypto';
+import { config } from './config.ts';
+import type { Db } from './db/index.ts';
 
-/** Límite local por IP; no confía en cabeceras de proxy enviadas por el cliente. */
-export function limitarAcceso(): RequestHandler {
-  const intentos = new Map<string, { cantidad: number; vence: number }>();
-  return (req, res, next) => {
-    const ahora = Date.now();
-    for (const [clave, intento] of intentos) {
-      if (intento.vence <= ahora) intentos.delete(clave);
+/** Contadores atómicos compartidos por todas las instancias que usan la misma base. */
+export function limitarAcceso(db: Db, ambito: string, maximo = 20): RequestHandler {
+  return async (req, res, next) => {
+    await db.query('DELETE FROM limites_acceso WHERE clave IN (SELECT clave FROM limites_acceso WHERE vence <= now() LIMIT 100)');
+    const identidades = [`ip:${req.ip ?? 'desconocida'}`];
+    if (typeof req.body?.email === 'string') identidades.push(`cuenta:${req.body.email.trim().toLowerCase().slice(0, 254)}`);
+    for (const identidad of identidades) {
+      const clave = createHmac('sha256', config.jwtSecret).update(`${ambito}:${identidad}`).digest('hex');
+      const [intento] = await db.query<{ cantidad: number; espera: number }>(
+        `INSERT INTO limites_acceso (clave, cantidad, vence) VALUES ($1, 1, now() + interval '15 minutes')
+         ON CONFLICT (clave) DO UPDATE SET
+           cantidad = CASE WHEN limites_acceso.vence <= now() THEN 1 ELSE LEAST(limites_acceso.cantidad + 1, $2 + 1) END,
+           vence = CASE WHEN limites_acceso.vence <= now() THEN now() + interval '15 minutes' ELSE limites_acceso.vence END
+         RETURNING cantidad, CEIL(EXTRACT(EPOCH FROM (vence - now())))::int AS espera`, [clave, maximo],
+      );
+      if (intento.cantidad > maximo) {
+        res.setHeader('Retry-After', String(Math.max(1, intento.espera)));
+        res.status(429).json({ error: 'Demasiados intentos. Espere unos minutos antes de volver a ingresar.' });
+        return;
+      }
     }
-    const clave = req.ip ?? 'desconocida';
-    const intento = intentos.get(clave) ?? { cantidad: 0, vence: ahora + 15 * 60_000 };
-    if (intento.cantidad >= 20 || (!intentos.has(clave) && intentos.size >= 10_000)) {
-      res.setHeader('Retry-After', String(Math.max(1, Math.ceil((intento.vence - ahora) / 1000))));
-      res.status(429).json({ error: 'Demasiados intentos. Espere unos minutos antes de volver a ingresar.' });
-      return;
-    }
-    intento.cantidad++;
-    intentos.set(clave, intento);
     next();
   };
 }

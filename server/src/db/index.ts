@@ -9,8 +9,12 @@ import { ESQUEMA } from './esquema.ts';
  * Acceso mínimo a PostgreSQL. Funciona igual con un servidor real (pg) o con
  * PGlite embebido, para poder desarrollar sin instalar ni configurar nada.
  */
-export interface Db {
+export interface Consultas {
   query<T = any>(sql: string, params?: unknown[]): Promise<T[]>;
+}
+
+export interface Db extends Consultas {
+  transaccion<T>(operacion: (conexion: Consultas) => Promise<T>): Promise<T>;
   exec(sql: string): Promise<void>;
   cerrar(): Promise<void>;
   motor: 'postgres' | 'pglite';
@@ -23,6 +27,20 @@ function desdePg(url: string): Db {
   const pool = new pg.Pool({ connectionString: url });
   return {
     motor: 'postgres',
+    async transaccion(operacion) {
+      const cliente = await pool.connect();
+      try {
+        await cliente.query('BEGIN');
+        const resultado = await operacion({ query: async (sql, params) => (await cliente.query(sql, params)).rows });
+        await cliente.query('COMMIT');
+        return resultado;
+      } catch (error) {
+        await cliente.query('ROLLBACK');
+        throw error;
+      } finally {
+        cliente.release();
+      }
+    },
     async query(sql, params) {
       return (await pool.query(sql, params as unknown[])).rows;
     },
@@ -38,6 +56,9 @@ async function desdePglite(dir: string | null): Promise<Db> {
   const lite = await PGlite.create(dir ?? undefined);
   return {
     motor: 'pglite',
+    transaccion: (operacion) => lite.transaction((conexion) => operacion({
+      query: async <T>(sql: string, params?: unknown[]) => (await conexion.query<T>(sql, params)).rows,
+    })),
     async query(sql, params) {
       return (await lite.query<any>(sql, params as unknown[])).rows;
     },

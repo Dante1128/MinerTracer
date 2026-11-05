@@ -8,6 +8,7 @@
     "dev:web": "npm run dev --prefix web",
     "build": "npm run build --prefix web",
     "start": "npm run start --prefix server",
+    "cuenta:crear": "npm run cuenta:crear --prefix server",
     "test": "npm test --prefix server",
     "test:testnet": "npm run test:testnet --prefix server",
     "demo:poblar": "npm run demo:poblar --prefix server",

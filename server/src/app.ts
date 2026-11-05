@@ -5,6 +5,8 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import multer from 'multer';
 import { config } from './config.ts';
 import { cabecerasSeguras } from './seguridad.ts';
+import { entregarCsrf, protegerCsrf } from './auth.ts';
+import { rutasCuentas } from './rutas/cuentas.ts';
 import { ErrorContrato } from './anclaje/erroresContrato.ts';
 import { ErrorHttp, type Contexto } from './contexto.ts';
 import { rutasContraAnalisis } from './rutas/contraAnalisis.ts';
@@ -18,7 +20,10 @@ import { ErrorValidacion } from './validacion.ts';
 export function crearApp(ctx: Contexto) {
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', config.proxiesConfiables.length ? config.proxiesConfiables : false);
   app.use(cabecerasSeguras);
+  app.get('/api/auth/csrf', (req, res) => res.json({ csrf: entregarCsrf(req, res) }));
+  app.use('/api', protegerCsrf);
   app.use(express.json({ limit: '100kb' }));
 
   app.use('/api/publico', rutasPublicas(ctx));
@@ -26,6 +31,7 @@ export function crearApp(ctx: Contexto) {
   app.use('/api/contra-analisis', rutasContraAnalisis(ctx));
   if (config.demoAlterar) app.use('/api/demo', rutasDemo(ctx));
   app.use('/api', rutasLaboratorio(ctx));
+  app.use('/api', rutasCuentas(ctx));
   app.use('/api', (_req, _res) => {
     throw new ErrorHttp(404, 'Ruta no encontrada');
   });
@@ -41,7 +47,7 @@ export function crearApp(ctx: Contexto) {
     if (error instanceof ErrorValidacion) {
       res.status(400).json({ error: 'Revise los datos del formulario', errores: error.errores });
     } else if (error instanceof ErrorHttp) {
-      res.status(error.estado).json({ error: error.message });
+      res.status(error.estado).json({ error: error.message, codigo: error.codigo });
     } else if (error instanceof ErrorContrato) {
       // El contrato rechazó la operación (estado del lote, permisos...).
       res.status(409).json({ error: error.message, codigo_contrato: error.codigo });

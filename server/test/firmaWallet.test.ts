@@ -88,7 +88,7 @@ const ctx = { db, anclaje, procesador: { procesar: async () => {} } as unknown a
 let servidor: Server;
 let base = '';
 let analista: Usuario;
-const tokens: Record<string, string> = {};
+const sesiones: Record<string, string> = {};
 
 const datos = (pureza: string) => ({
   fecha_analisis: '2026-09-15T14:30:00Z',
@@ -99,16 +99,18 @@ const datos = (pureza: string) => ({
 });
 const pdf = (t: string) => ({ buffer: pdfSimple('Informe', [t]), nombre: 'informe.pdf' });
 
-async function api(ruta: string, opciones: { token?: string; json?: unknown; form?: FormData } = {}) {
+async function api(ruta: string, opciones: { sesion?: string; json?: unknown; form?: FormData } = {}) {
   const headers: Record<string, string> = {};
-  if (opciones.token) headers.authorization = `Bearer ${opciones.token}`;
+  const preparacion = await fetch(base + '/api/auth/csrf', { headers: { cookie: opciones.sesion ?? '' } });
+  headers.cookie = [opciones.sesion, preparacion.headers.getSetCookie()[0]?.split(';')[0]].filter(Boolean).join('; ');
+  headers['X-CSRF-Token'] = (await preparacion.json()).csrf;
   if (opciones.json !== undefined) headers['content-type'] = 'application/json';
   const res = await fetch(base + ruta, {
     method: opciones.json !== undefined || opciones.form ? 'POST' : 'GET',
     headers,
     body: opciones.form ?? (opciones.json !== undefined ? JSON.stringify(opciones.json) : undefined),
   });
-  return { estado: res.status, cuerpo: await res.json() };
+  return { sesion: res.headers.getSetCookie().find((valor) => valor.startsWith('minertrace.sesion='))?.split(';')[0], estado: res.status, cuerpo: await res.json() };
 }
 
 before(async () => {
@@ -118,7 +120,7 @@ before(async () => {
   servidor = crearApp(ctx).listen(0);
   base = `http://127.0.0.1:${(servidor.address() as AddressInfo).port}`;
   for (const email of ['analista@lab001.test', 'analista@lab002.test']) {
-    tokens[email] = (await api('/api/auth/login', { json: { email, password: PASSWORD_DEMO } })).cuerpo.token;
+    sesiones[email] = (await api('/api/auth/login', { json: { email, password: PASSWORD_DEMO } })).sesion!;
   }
 });
 
@@ -158,26 +160,26 @@ test('con firma por wallet el procesador no firma los análisis del portal: solo
 test('el laboratorio firma su análisis con la wallet y el servidor lo marca anclado', async () => {
   const fila = await registrarAnalisis(ctx, analista, 'LT-WAL-0001', datos('70.00'), pdf('wallet'));
   const ruta = `/api/analisis/${fila.analisis_id}/v/1/firma`;
-  const lab1 = tokens['analista@lab001.test'];
+  const lab1 = sesiones['analista@lab001.test'];
 
   assert.equal((await api(ruta, { json: { cuenta: CUENTA_LAB1 } })).estado, 401);
-  const otraCuenta = await api(ruta, { token: lab1, json: { cuenta: CUENTA_LAB2 } });
+  const otraCuenta = await api(ruta, { sesion: lab1, json: { cuenta: CUENTA_LAB2 } });
   assert.equal(otraCuenta.estado, 403);
   assert.match(otraCuenta.cuerpo.error, new RegExp(CUENTA_LAB1));
-  assert.equal((await api(ruta, { token: tokens['analista@lab002.test'], json: { cuenta: CUENTA_LAB2 } })).estado, 404);
+  assert.equal((await api(ruta, { sesion: sesiones['analista@lab002.test'], json: { cuenta: CUENTA_LAB2 } })).estado, 404);
 
-  const preparada = await api(ruta, { token: lab1, json: { cuenta: CUENTA_LAB1 } });
+  const preparada = await api(ruta, { sesion: lab1, json: { cuenta: CUENTA_LAB1 } });
   assert.equal(preparada.estado, 200);
   assert.equal(preparada.cuerpo.xdr, `XDR:${fila.hash}`);
   assert.equal(red.preparadas[0].cuentaLaboratorio, CUENTA_LAB1);
   assert.equal((await estadoDe(fila.id)).estado_anclaje, 'pendiente', 'preparar no ancla');
 
-  const enviada = await api(`${ruta}/enviar`, { token: lab1, json: { cuenta: CUENTA_LAB1, xdr: `${preparada.cuerpo.xdr}:firmado` } });
+  const enviada = await api(`${ruta}/enviar`, { sesion: lab1, json: { cuenta: CUENTA_LAB1, xdr: `${preparada.cuerpo.xdr}:firmado` } });
   assert.equal(enviada.estado, 200, JSON.stringify(enviada.cuerpo));
   assert.equal(enviada.cuerpo.tx_id, TX);
   assert.deepEqual(await estadoDe(fila.id), { estado_anclaje: 'anclado', tx_id: TX });
 
-  const otraVez = await api(ruta, { token: lab1, json: { cuenta: CUENTA_LAB1 } });
+  const otraVez = await api(ruta, { sesion: lab1, json: { cuenta: CUENTA_LAB1 } });
   assert.equal(otraVez.estado, 409);
 });
 
@@ -185,7 +187,7 @@ test('si la versión ya estaba en el contrato, preparar la reconcilia en vez de 
   const fila = await registrarAnalisis(ctx, analista, 'LT-WAL-0001', datos('71.00'), pdf('repetido'));
   red.prepararFalla = new ErrorContrato(6);
   red.enLaRed.set(fila.hash, { txId: TX, fecha: '2026-10-05T12:00:00Z' });
-  const r = await api(`/api/analisis/${fila.analisis_id}/v/1/firma`, { token: tokens['analista@lab001.test'], json: { cuenta: CUENTA_LAB1 } });
+  const r = await api(`/api/analisis/${fila.analisis_id}/v/1/firma`, { sesion: sesiones['analista@lab001.test'], json: { cuenta: CUENTA_LAB1 } });
   assert.deepEqual(r.cuerpo, { ya_anclado: true, tx_id: TX });
   assert.equal((await estadoDe(fila.id)).estado_anclaje, 'anclado');
 });
@@ -202,7 +204,7 @@ test('el contra-análisis con wallet solo se guarda si el contrato registró el 
     venta: { vendedor: 'G', precio: '1', comprador: 'G2', analisis_id: 'AN-1', version: 1, lab: CUENTA_LAB1, pureza_bps: 7500, vence_garantia: '0' },
     contra_analisis: null,
   };
-  const lab2 = tokens['analista@lab002.test'];
+  const lab2 = sesiones['analista@lab002.test'];
   const formulario = (cuenta: string) => {
     const f = new FormData();
     f.set('lote_id', 'LT-WAL-0001');
@@ -216,8 +218,8 @@ test('el contra-análisis con wallet solo se guarda si el contrato registró el 
   };
   const contar = async () => (await db.query<{ n: number }>('SELECT COUNT(*)::int AS n FROM contra_analisis'))[0].n;
 
-  assert.equal((await api('/api/contra-analisis/preparar', { token: lab2, form: formulario(CUENTA_LAB1) })).estado, 403);
-  const preparado = await api('/api/contra-analisis/preparar', { token: lab2, form: formulario(CUENTA_LAB2) });
+  assert.equal((await api('/api/contra-analisis/preparar', { sesion: lab2, form: formulario(CUENTA_LAB1) })).estado, 403);
+  const preparado = await api('/api/contra-analisis/preparar', { sesion: lab2, form: formulario(CUENTA_LAB2) });
   assert.equal(preparado.estado, 200, JSON.stringify(preparado.cuerpo));
   const { xdr, registro, pdf_nombre } = preparado.cuerpo;
   assert.equal(registro.tipo, 'contra_analisis');
@@ -226,20 +228,20 @@ test('el contra-análisis con wallet solo se guarda si el contrato registró el 
 
   // Un registro manipulado no coincide con el hash que quedó en el contrato.
   const manipulado = await api('/api/contra-analisis/enviar', {
-    token: lab2,
+    sesion: lab2,
     json: { registro: { ...registro, pureza: '75.00', composicion: { Sn: '75.00' } }, pdf_nombre, xdr: `${xdr}:firmado` },
   });
   assert.equal(manipulado.estado, 409);
   assert.equal(await contar(), 0);
 
   estadoLote = { ...estadoLote, contra_analisis: null };
-  const enviado = await api('/api/contra-analisis/enviar', { token: lab2, json: { registro, pdf_nombre, xdr: `${xdr}:firmado` } });
+  const enviado = await api('/api/contra-analisis/enviar', { sesion: lab2, json: { registro, pdf_nombre, xdr: `${xdr}:firmado` } });
   assert.equal(enviado.estado, 201, JSON.stringify(enviado.cuerpo));
   assert.equal(enviado.cuerpo.tx_id, TX);
   assert.equal(await contar(), 1);
 
   // En modo wallet, el servidor no firma contra-análisis.
-  assert.equal((await api('/api/contra-analisis', { token: lab2, form: formulario(CUENTA_LAB2) })).estado, 409);
+  assert.equal((await api('/api/contra-analisis', { sesion: lab2, form: formulario(CUENTA_LAB2) })).estado, 409);
 });
 
 test('el servidor informa el modo de firma', async () => {

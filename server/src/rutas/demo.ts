@@ -17,7 +17,7 @@ import { validarPureza } from '../validacion.ts';
  */
 export function rutasDemo(ctx: Contexto) {
   const r = Router();
-  r.use(requiereSesion);
+  r.use(requiereSesion(ctx.db));
 
   r.post('/alterar', async (req, res) => {
     const usuario = usuarioDe(req);

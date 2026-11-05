@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useLocation } from 'react-router';
+import { Link, Navigate, useLocation } from 'react-router';
 import { ErrorApi } from '../api.ts';
 import { Logo } from '../componentes/Layout.tsx';
 import { useSesion } from '../sesion.tsx';
 
 export function Login() {
-  const { usuario, entrar } = useSesion();
-  const destino = (useLocation().state as { desde?: string } | null)?.desde ?? '/laboratorio';
+  const { usuario, entrar, aviso } = useSesion();
+  const estado = useLocation().state as { desde?: string; mensaje?: string } | null;
+  const destino = estado?.desde?.startsWith('/laboratorio') ? estado.desde : '/laboratorio';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +36,7 @@ export function Login() {
         <p className="text-sm text-stone-600">Acceso para analistas y supervisores</p>
       </div>
       <form onSubmit={enviar} className="tarjeta space-y-4 p-6">
+        {(aviso || estado?.mensaje) && <p role="status" className="text-sm text-emerald-800">{aviso || estado?.mensaje}</p>}
         <div>
           <label className="etiqueta" htmlFor="email">
             Correo
@@ -60,6 +62,7 @@ export function Login() {
           {enviando ? 'Ingresando…' : 'Ingresar'}
         </button>
       </form>
+      <Link className="mt-4 block text-center text-sm text-mineral-700 hover:underline" to="/laboratorio/recuperar">Olvidé mi contraseña</Link>
       {import.meta.env.DEV && (
         <div className="mt-4 rounded-lg bg-mineral-50 p-3 text-xs text-stone-700">
           <p className="font-semibold">Usuarios de prueba (contraseña: minertrace123)</p>
