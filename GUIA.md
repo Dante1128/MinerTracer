@@ -578,7 +578,8 @@ Freighter (firma) ◄──────── XDR ─────────┘
 | Tema | Estado |
 |---|---|
 | Retirar una publicación sin comprador | No existe (`unlist_batch`) |
-| Alta de usuarios y laboratorios | Sin pantallas: usuarios de la semilla; laboratorios por consola (`add_lab`) |
+| Alta de usuarios y laboratorios | Usuarios desde **Usuarios** (supervisores); primer supervisor con `npm run cuenta:crear`. La autorización Stellar sigue siendo por `add_lab` |
+| Recuperación y sesiones | **Olvidé mi contraseña**, **Mi cuenta**, cookies HttpOnly, CSRF y revocación inmediata; requiere configurar SMTP para enviar enlaces |
 | PDF en producción | Se guardan en el disco del servidor; para desplegar hay que usar disco persistente o Supabase Storage |
 | Passkeys para técnicos | Evaluado (Smart Account Kit), no implementado; estimado en 3-5 días |
 | Cobro por vencimiento | Implementado y probado; con 7 días no se puede mostrar en vivo (se puede desplegar un contrato con plazo corto) |

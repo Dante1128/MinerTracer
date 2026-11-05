@@ -38,8 +38,17 @@ Para empezar de cero con PGlite, borre `server/datos/`.
 
 ```bash
 npm run build             # compila web/dist
-NODE_ENV=production JWT_SECRET=... npm start   # la API también sirve el frontend en :3000
+# Configure JWT_SECRET, ORIGEN_PUBLICO y SMTP en server/.env (vea PRODUCCION.md).
+npm run cuenta:crear      # crea el laboratorio y su primer supervisor por invitación
+NODE_ENV=production npm start   # la API también sirve el frontend en :3000
 ```
+
+La preparación completa está en [PRODUCCION.md](PRODUCCION.md). El arranque de
+producción no crea usuarios demo. El supervisor administra su equipo desde
+**Usuarios** y cada persona elige su contraseña mediante un enlace de correo.
+**Mi cuenta** permite cambiar contraseña y cerrar todas las sesiones; el acceso
+incluye recuperación. Las sesiones usan cookies HttpOnly y protección CSRF; ya
+no se guardan credenciales en localStorage.
 
 ## Demostración del fraude (sección 13)
 

@@ -309,7 +309,7 @@ MinerTrace detectó que el registro fue modificado después del 15 de septiembre
 | Integración Stellar | Stellar SDK (JavaScript o Python), API Horizon o Stellar RPC; Testnet para desarrollo |
 | Contratos inteligentes (opcional) | Soroban, escrito en Rust |
 | Gestión de claves | Variables de entorno cifradas en el prototipo; HashiCorp Vault o un servicio KMS en producción |
-| Autenticación | JWT u OAuth 2.0, con roles (analista, supervisor, verificador) |
+| Autenticación | Sesiones revocables en PostgreSQL/PGlite, cookies HttpOnly y protección CSRF; roles de analista y supervisor; verificación pública sin sesión |
 | Colas y reintentos | Redis con BullMQ, o Celery en Python, para anclajes pendientes |
 | PWA | Service Worker y Web App Manifest (por ejemplo, con `next-pwa` o Vite PWA) |
 | Despliegue | Docker y Docker Compose; luego un servicio en la nube |
