@@ -9,6 +9,9 @@ import { DetalleAnalisis } from './paginas/DetalleAnalisis.tsx';
 import { DetalleMercado } from './paginas/DetalleMercado.tsx';
 import { Inicio } from './paginas/Inicio.tsx';
 import { Login } from './paginas/Login.tsx';
+import { RecuperarAcceso } from './paginas/RecuperarAcceso.tsx';
+import { MiCuenta } from './paginas/MiCuenta.tsx';
+import { Usuarios } from './paginas/Usuarios.tsx';
 import { Mercado } from './paginas/Mercado.tsx';
 import { MisLotes } from './paginas/MisLotes.tsx';
 import { NuevoAnalisis } from './paginas/NuevoAnalisis.tsx';
@@ -32,8 +35,11 @@ createRoot(document.getElementById('root')!).render(
               <Route path="mercado/:loteId" element={<DetalleMercado />} />
               <Route path="mis-lotes" element={<MisLotes />} />
               <Route path="laboratorio/login" element={<Login />} />
+              <Route path="laboratorio/recuperar" element={<RecuperarAcceso />} />
               <Route path="laboratorio" element={<RutaProtegida />}>
                 <Route index element={<Panel />} />
+                <Route path="cuenta" element={<MiCuenta />} />
+                <Route path="usuarios" element={<Usuarios />} />
                 <Route path="nuevo" element={<NuevoAnalisis />} />
                 <Route path="analisis/:analisisId" element={<DetalleAnalisis />} />
                 <Route path="contra-analisis" element={<ContraAnalisis />} />

@@ -21,7 +21,7 @@ const loteDe = (req: Request) => String(req.body?.lote_id ?? '').trim().toUpperC
 /** Portal del laboratorio: contra-análisis de lotes en garantía (requiere sesión). */
 export function rutasContraAnalisis(ctx: Contexto) {
   const r = Router();
-  r.use(requiereSesion);
+  r.use(requiereSesion(ctx.db));
 
   r.get('/pendientes', async (req, res) => {
     res.json(await lotesParaContraAnalisis(ctx, usuarioDe(req)));

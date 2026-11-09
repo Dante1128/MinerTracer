@@ -1,4 +1,5 @@
 import { Link, NavLink, Outlet } from 'react-router';
+import { useState } from 'react';
 import { anclajeReal, useInfoServidor } from '../infoServidor.ts';
 import { BotonWallet } from './Mercado.tsx';
 import { useSesion } from '../sesion.tsx';
@@ -15,6 +16,15 @@ const enlacePortal = ({ isActive }: { isActive: boolean }) =>
 
 export function Layout() {
   const { usuario, salir } = useSesion();
+  const [errorSalida, setErrorSalida] = useState<string | null>(null);
+  const [saliendo, setSaliendo] = useState(false);
+  const cerrar = async () => {
+    setSaliendo(true);
+    setErrorSalida(null);
+    try { await salir(); }
+    catch { setErrorSalida('No se pudo cerrar la sesión. Compruebe la conexión y vuelva a intentarlo.'); }
+    finally { setSaliendo(false); }
+  };
   const info = useInfoServidor();
   return (
     <div className="flex min-h-dvh flex-col">
@@ -63,13 +73,15 @@ export function Layout() {
               <NavLink to="/laboratorio/contra-analisis" className={enlacePortal}>
                 Contra-análisis
               </NavLink>
+              <NavLink to="/laboratorio/cuenta" className={enlacePortal}>Mi cuenta</NavLink>
+              {usuario.rol === 'supervisor' && <NavLink to="/laboratorio/usuarios" className={enlacePortal}>Usuarios</NavLink>}
             </div>
             <div className="flex shrink-0 items-center gap-2 text-xs text-stone-500">
               <span className="hidden md:inline" title={usuario.email}>
                 {usuario.nombre} · {usuario.rol} · {usuario.laboratorio_id}
               </span>
-              <button onClick={salir} className="rounded-lg px-2 py-1 font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900">
-                Salir
+              <button onClick={() => void cerrar()} disabled={saliendo} className="rounded-lg px-2 py-1 font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900">
+                {saliendo ? 'Saliendo…' : 'Salir'}
               </button>
             </div>
           </div>
@@ -77,6 +89,7 @@ export function Layout() {
       )}
 
       <main className="flex-1">
+        {errorSalida && <p role="alert" className="mx-auto max-w-6xl p-4 text-sm text-red-700">{errorSalida}</p>}
         <Outlet />
       </main>
       <footer className="border-t border-stone-200 py-6 text-center text-xs text-stone-500 print:hidden">

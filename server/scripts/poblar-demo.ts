@@ -386,9 +386,29 @@ function claveDe(variable: string, identidad: string): Keypair {
   return Keypair.fromSecret(secreto);
 }
 
-async function api<T = any>(ruta: string, opciones: { token?: string; json?: unknown; form?: FormData } = {}): Promise<T> {
+interface SesionDemo { cookies: Map<string, string>; csrf: string; }
+const guardarCookies = (sesion: SesionDemo, respuesta: Response) => {
+  for (const cookie of respuesta.headers.getSetCookie()) {
+    const par = cookie.split(';')[0];
+    const separador = par.indexOf('=');
+    sesion.cookies.set(par.slice(0, separador), par.slice(separador + 1));
+  }
+};
+const cabeceraCookie = (sesion: SesionDemo) => [...sesion.cookies].map(([nombre, valor]) => `${nombre}=${valor}`).join('; ');
+
+async function api<T = any>(ruta: string, opciones: { sesion?: SesionDemo; json?: unknown; form?: FormData } = {}): Promise<T> {
   const headers: Record<string, string> = {};
-  if (opciones.token) headers.authorization = `Bearer ${opciones.token}`;
+  const sesion = opciones.sesion ?? { cookies: new Map<string, string>(), csrf: '' };
+  if (opciones.json !== undefined || opciones.form) {
+    if (!sesion.csrf) {
+      const preparacion = await fetch(`${API}/auth/csrf`, { headers: { cookie: cabeceraCookie(sesion) } });
+      if (!preparacion.ok) throw new Error('No se pudo preparar la sesión de la demo');
+      guardarCookies(sesion, preparacion);
+      sesion.csrf = (await preparacion.json()).csrf;
+    }
+    headers['X-CSRF-Token'] = sesion.csrf;
+  }
+  headers.cookie = cabeceraCookie(sesion);
   if (opciones.json !== undefined) headers['content-type'] = 'application/json';
   let res: Response;
   try {
@@ -401,6 +421,8 @@ async function api<T = any>(ruta: string, opciones: { token?: string; json?: unk
     throw new Error(`No hay conexión con ${API}: inicie el servidor con npm run dev`);
   }
   const cuerpo = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
+  guardarCookies(sesion, res);
+  if (typeof cuerpo?.csrf === 'string') sesion.csrf = cuerpo.csrf;
   if (!res.ok) {
     const detalle = cuerpo?.errores ? ` ${JSON.stringify(cuerpo.errores)}` : '';
     throw new Error(`${ruta}: ${cuerpo?.error ?? res.status}${detalle}`);
@@ -454,8 +476,12 @@ const cuentas = {
   comprador: claveDe('DEMO_SECRETO_COMPRADOR', 'minertrace-comprador'),
 };
 
-const login = async (email: string) => (await api<{ token: string }>('/auth/login', { json: { email, password: PASSWORD } })).token;
-const tokens = {
+const login = async (email: string): Promise<SesionDemo> => {
+  const sesion: SesionDemo = { cookies: new Map(), csrf: '' };
+  await api('/auth/login', { sesion, json: { email, password: PASSWORD } });
+  return sesion;
+};
+const sesiones = {
   A: await login('analista@lab001.test'),
   supervisorA: await login('supervisor@lab001.test'),
   B: await login('analista@lab002.test'),
@@ -463,7 +489,7 @@ const tokens = {
 
 // Las cuentas firmantes deben ser las de los laboratorios registrados en el servidor.
 for (const lab of ['A', 'B'] as const) {
-  const { laboratorio } = await api<{ laboratorio: { id: string; cuenta_publica: string } }>('/auth/yo', { token: tokens[lab] });
+  const { laboratorio } = await api<{ laboratorio: { id: string; cuenta_publica: string } }>('/auth/yo', { sesion: sesiones[lab] });
   if (laboratorio.cuenta_publica !== cuentas[lab].publicKey()) {
     console.error(
       `La cuenta de ${laboratorio.id} en el servidor (${laboratorio.cuenta_publica}) no es la de minertrace-lab-${lab.toLowerCase()}.` +
@@ -475,17 +501,17 @@ for (const lab of ['A', 'B'] as const) {
 
 /** Ancla una versión: con la wallet del laboratorio, o esperando al servidor si la firma él. */
 async function anclar(lab: 'A' | 'B', analisisId: string, version: number) {
-  const token = lab === 'A' ? tokens.A : tokens.B;
-  const detalle = async () => (await api(`/analisis/${analisisId}`, { token })).versiones.find((v: any) => v.version === version);
+  const sesion = lab === 'A' ? sesiones.A : sesiones.B;
+  const detalle = async () => (await api(`/analisis/${analisisId}`, { sesion })).versiones.find((v: any) => v.version === version);
   const actual = await detalle();
   if (actual.estado_anclaje === 'anclado') return;
 
   if (info.firma_laboratorio === 'wallet' && !actual.firma_servidor) {
     const ruta = `/analisis/${analisisId}/v/${version}/firma`;
     const cuenta = cuentas[lab].publicKey();
-    const preparado = await api<{ xdr?: string; tx_id?: string }>(ruta, { token, json: { cuenta } });
+    const preparado = await api<{ xdr?: string; tx_id?: string }>(ruta, { sesion, json: { cuenta } });
     if (preparado.xdr) {
-      const r = await api<{ tx_id: string }>(`${ruta}/enviar`, { token, json: { cuenta, xdr: firmar(preparado.xdr, cuentas[lab]) } });
+      const r = await api<{ tx_id: string }>(`${ruta}/enviar`, { sesion, json: { cuenta, xdr: firmar(preparado.xdr, cuentas[lab]) } });
       log(`anclado ${analisisId} v${version} · ${EXPLORADOR}${r.tx_id}`);
     }
     return;
@@ -526,17 +552,17 @@ async function contraAnalisis(lote: LoteDemo, pureza: string) {
   if (info.firma_laboratorio === 'wallet') {
     const cuenta = cuentas.B.publicKey();
     const prep = await api<{ xdr: string; registro: unknown; pdf_nombre: string }>('/contra-analisis/preparar', {
-      token: tokens.B,
+      sesion: sesiones.B,
       form: formularioAnalisis(datos, lote, nombreLab, { lote_id: lote.codigo, cuenta }),
     });
     const r = await api<{ tx_id: string }>('/contra-analisis/enviar', {
-      token: tokens.B,
+      sesion: sesiones.B,
       json: { registro: prep.registro, pdf_nombre: prep.pdf_nombre, xdr: firmar(prep.xdr, cuentas.B) },
     });
     log(`contra-análisis ${pureza} % (LAB-002) · ${EXPLORADOR}${r.tx_id}`);
   } else {
     const r = await api<{ tx_id: string }>('/contra-analisis', {
-      token: tokens.B,
+      sesion: sesiones.B,
       form: formularioAnalisis(datos, lote, nombreLab, { lote_id: lote.codigo }),
     });
     log(`contra-análisis ${pureza} % (LAB-002) · ${EXPLORADOR}${r.tx_id}`);
@@ -549,7 +575,7 @@ async function estadoComercial(loteId: string): Promise<string | null> {
 
 // Lote de ejemplo de la semilla: se ancla (si falta) y se publica.
 console.log('LT-2026-0457 · lote de ejemplo de la semilla');
-const semilla = (await api(`/analisis/AN-2026-0001`, { token: tokens.A }).catch(() => null)) as any;
+const semilla = (await api(`/analisis/AN-2026-0001`, { sesion: sesiones.A }).catch(() => null)) as any;
 if (semilla?.lote?.id === 'LT-2026-0457') {
   await anclar('A', 'AN-2026-0001', 1);
   const estado = await estadoComercial('LT-2026-0457');
@@ -563,8 +589,8 @@ if (semilla?.lote?.id === 'LT-2026-0457') {
 }
 
 const existentes = new Set<string>();
-for (const token of [tokens.A, tokens.B]) {
-  for (const l of await api<{ id: string }[]>('/lotes', { token })) existentes.add(l.id);
+for (const sesion of [sesiones.A, sesiones.B]) {
+  for (const l of await api<{ id: string }[]>('/lotes', { sesion })) existentes.add(l.id);
 }
 
 for (const lote of LOTES) {
@@ -573,10 +599,10 @@ for (const lote of LOTES) {
     log('ya existe: se omite');
     continue;
   }
-  const token = lote.lab === 'A' ? tokens.A : tokens.B;
+  const sesion = lote.lab === 'A' ? sesiones.A : sesiones.B;
   const laboratorio = lote.lab === 'A' ? 'Laboratorio Minero Andino' : 'Laboratorio de Contraste del Sur';
   await api('/lotes', {
-    token,
+    sesion,
     json: {
       codigo: lote.codigo,
       tipo_mineral: lote.tipo,
@@ -587,7 +613,7 @@ for (const lote of LOTES) {
     },
   });
   const form = formularioAnalisis(lote.analisis, lote, laboratorio, { lote_id: lote.codigo });
-  const { analisis_id } = await api<{ analisis_id: string }>('/analisis', { token, form });
+  const { analisis_id } = await api<{ analisis_id: string }>('/analisis', { sesion, form });
   log(`registrado ${analisis_id} (${lote.analisis.pureza} %)`);
   if (lote.destino === 'sin_firmar') {
     log(info.firma_laboratorio === 'wallet' ? 'queda esperando la firma del laboratorio con Freighter' : 'lo ancla el servidor');
@@ -598,7 +624,7 @@ for (const lote of LOTES) {
   if (lote.correccion) {
     const datos = { ...lote.analisis, pureza: lote.correccion.pureza, composicion: lote.correccion.composicion };
     await api(`/analisis/${analisis_id}/versiones`, {
-      token: tokens.supervisorA,
+      sesion: sesiones.supervisorA,
       form: formularioAnalisis(datos, lote, laboratorio, { motivo_correccion: lote.correccion.motivo }),
     });
     log(`corrección v2 (${lote.correccion.pureza} %): ${lote.correccion.motivo}`);

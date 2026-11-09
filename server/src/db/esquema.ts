@@ -24,6 +24,45 @@ CREATE TABLE IF NOT EXISTS usuarios (
   laboratorio_id  TEXT NOT NULL REFERENCES laboratorios(id)
 );
 
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS revision_acceso INT NOT NULL DEFAULT 1;
+
+CREATE TABLE IF NOT EXISTS sesiones (
+  hash TEXT PRIMARY KEY,
+  usuario_id INT NOT NULL REFERENCES usuarios(id),
+  revision_acceso INT NOT NULL,
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
+  vence TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sesiones_usuario_idx ON sesiones(usuario_id);
+CREATE INDEX IF NOT EXISTS sesiones_vence_idx ON sesiones(vence);
+
+CREATE TABLE IF NOT EXISTS recuperaciones (
+  hash TEXT PRIMARY KEY,
+  usuario_id INT NOT NULL REFERENCES usuarios(id),
+  revision_acceso INT NOT NULL,
+  vence TIMESTAMPTZ NOT NULL,
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS recuperaciones_usuario_idx ON recuperaciones(usuario_id);
+
+CREATE TABLE IF NOT EXISTS correos_pendientes (
+  id SERIAL PRIMARY KEY,
+  destinatario TEXT NOT NULL,
+  contenido_cifrado TEXT NOT NULL,
+  intentos INT NOT NULL DEFAULT 0,
+  reservado_hasta TIMESTAMPTZ NOT NULL DEFAULT now(),
+  vence TIMESTAMPTZ NOT NULL
+);
+ALTER TABLE correos_pendientes ADD COLUMN IF NOT EXISTS usuario_id INT REFERENCES usuarios(id);
+
+CREATE TABLE IF NOT EXISTS limites_acceso (
+  clave TEXT PRIMARY KEY,
+  cantidad INT NOT NULL,
+  vence TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS limites_acceso_vence_idx ON limites_acceso(vence);
+
 CREATE SEQUENCE IF NOT EXISTS seq_lote;
 CREATE SEQUENCE IF NOT EXISTS seq_analisis;
 

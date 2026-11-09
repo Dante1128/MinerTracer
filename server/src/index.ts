@@ -2,6 +2,7 @@ import { crearServicioAnclaje } from './anclaje/index.ts';
 import { ProcesadorAnclajes } from './anclaje/procesador.ts';
 import { crearApp } from './app.ts';
 import { config } from './config.ts';
+import { ProcesadorCorreos } from './correo.ts';
 import { conectar } from './db/index.ts';
 import { Mercado } from './mercado/mercado.ts';
 import { PASSWORD_DEMO, sembrar } from './semilla.ts';
@@ -12,13 +13,15 @@ const procesador = new ProcesadorAnclajes(db, anclaje);
 // El marketplace solo existe sobre el contrato real.
 const mercado = config.anclaje.proveedor === 'stellar' ? new Mercado(db, config.stellar.rpcUrl, config.stellar.contratoId) : null;
 const ctx = { db, anclaje, procesador, mercado };
+const correos = new ProcesadorCorreos(db);
 
-if (await sembrar(ctx)) {
+if (!config.produccion && await sembrar(ctx)) {
   console.log(
     `[semilla] Usuarios de prueba: analista@lab001.test, supervisor@lab001.test, analista@lab002.test, supervisor@lab002.test (contraseña: ${PASSWORD_DEMO})`,
   );
 }
 procesador.iniciar();
+correos.iniciar();
 mercado?.indexador.iniciar();
 
 const servidor = crearApp(ctx).listen(config.puerto, () => {
@@ -30,6 +33,7 @@ const servidor = crearApp(ctx).listen(config.puerto, () => {
 
 async function apagar() {
   procesador.detener();
+  correos.detener();
   mercado?.indexador.detener();
   servidor.close();
   await db.cerrar();

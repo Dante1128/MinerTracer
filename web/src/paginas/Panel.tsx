@@ -148,6 +148,7 @@ export function Panel() {
               </p>
               <p className="text-sm text-stone-500">{l.origen}</p>
               <p className="mt-1 text-xs text-stone-500">{l.total_analisis} análisis</p>
+              <Link className="boton-secundario mt-3" to={`/laboratorio/nuevo?lote=${encodeURIComponent(l.id)}`}>Registrar análisis de este lote</Link>
             </div>
           ))}
         </div>

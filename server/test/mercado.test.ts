@@ -260,9 +260,11 @@ test('con ANCLAJE=mock el marketplace queda deshabilitado', async () => {
   assert.deepEqual(info, { habilitado: false });
   const lotes = await fetch(`${base}/api/mercado/lotes`);
   assert.equal(lotes.status, 503);
+  const preparacion = await fetch(`${base}/api/auth/csrf`);
+  const csrf = (await preparacion.json()).csrf;
   const tx = await fetch(`${base}/api/mercado/transacciones`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: preparacion.headers.getSetCookie()[0].split(';')[0], 'X-CSRF-Token': csrf },
     body: JSON.stringify({ accion: 'buy', cuenta: COMPRADOR, lote_id: 'LT-MER-0001' }),
   });
   assert.equal(tx.status, 503);

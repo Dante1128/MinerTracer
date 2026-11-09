@@ -26,6 +26,16 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL || null,
   datosDir: path.resolve(process.env.DATOS_DIR || './datos'),
   jwtSecret: process.env.JWT_SECRET || 'solo-para-desarrollo-cambiar',
+  origenPublico: process.env.ORIGEN_PUBLICO || 'http://localhost:5173',
+  proxiesConfiables: (process.env.PROXIES_CONFIABLES || '').split(',').map((valor) => valor.trim()).filter(Boolean),
+  correo: {
+    host: process.env.SMTP_HOST || '',
+    puerto: entero(process.env.SMTP_PORT, 587),
+    seguro: process.env.SMTP_SECURE === 'true',
+    usuario: process.env.SMTP_USUARIO || '',
+    clave: process.env.SMTP_CLAVE || '',
+    remitente: process.env.SMTP_REMITENTE || '',
+  },
   anclaje: {
     proveedor: process.env.ANCLAJE || 'mock',
     mockRetrasoMs: entero(process.env.MOCK_RETRASO_MS, 2500),
@@ -51,4 +61,22 @@ export const config = {
 
 if (produccion && config.jwtSecret === 'solo-para-desarrollo-cambiar') {
   throw new Error('JWT_SECRET es obligatorio en producción');
+}
+
+if (produccion && (config.jwtSecret.length < 32 || config.jwtSecret.startsWith('cambie-esto'))) {
+  throw new Error('JWT_SECRET debe tener al menos 32 caracteres aleatorios en producción');
+}
+if (produccion && config.stellar.firmaLaboratorio === 'servidor') {
+  throw new Error('En producción los laboratorios deben firmar con su wallet');
+}
+
+const origen = new URL(config.origenPublico);
+if (!['http:', 'https:'].includes(origen.protocol) || origen.origin !== config.origenPublico || (produccion && origen.protocol !== 'https:')) {
+  throw new Error('ORIGEN_PUBLICO debe ser un origen sin ruta; en producción requiere HTTPS');
+}
+if (!Number.isInteger(config.correo.puerto) || config.correo.puerto < 1 || config.correo.puerto > 65535) {
+  throw new Error('SMTP_PORT debe ser un puerto válido');
+}
+if (produccion && (!process.env.ORIGEN_PUBLICO || !config.correo.host || !config.correo.remitente)) {
+  throw new Error('Configure ORIGEN_PUBLICO, SMTP_HOST y SMTP_REMITENTE para producción');
 }

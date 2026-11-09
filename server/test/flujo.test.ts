@@ -27,21 +27,23 @@ const ctx = { db, anclaje, procesador };
 let servidor: Server;
 let base = '';
 
-async function api(ruta: string, opciones: RequestInit & { token?: string; json?: unknown } = {}) {
+async function api(ruta: string, opciones: RequestInit & { sesion?: string; json?: unknown } = {}) {
   const headers: Record<string, string> = {};
-  if (opciones.token) headers.authorization = `Bearer ${opciones.token}`;
+  const preparacion = await fetch(base + '/api/auth/csrf', { headers: { cookie: opciones.sesion ?? '' } });
+  headers.cookie = [opciones.sesion, preparacion.headers.getSetCookie()[0]?.split(';')[0]].filter(Boolean).join('; ');
+  headers['X-CSRF-Token'] = (await preparacion.json()).csrf;
   if (opciones.json !== undefined) headers['content-type'] = 'application/json';
   const res = await fetch(base + ruta, {
     ...opciones,
     headers,
     body: opciones.json !== undefined ? JSON.stringify(opciones.json) : opciones.body,
   });
-  return { estado: res.status, cuerpo: res.headers.get('content-type')?.includes('json') ? await res.json() : await res.text() };
+  return { sesion: res.headers.getSetCookie().find((valor) => valor.startsWith('minertrace.sesion='))?.split(';')[0], estado: res.status, cuerpo: res.headers.get('content-type')?.includes('json') ? await res.json() : await res.text() };
 }
 
 async function login(email: string) {
-  const { cuerpo } = await api('/api/auth/login', { method: 'POST', json: { email, password: PASSWORD_DEMO } });
-  return cuerpo.token as string;
+  const { sesion } = await api('/api/auth/login', { method: 'POST', json: { email, password: PASSWORD_DEMO } });
+  return sesion as string;
 }
 
 before(async () => {
@@ -56,14 +58,28 @@ after(async () => {
   fs.rmSync(dirTemporal, { recursive: true, force: true });
 });
 
+test('las respuestas privadas no se almacenan y el navegador recibe protección', async () => {
+  const respuesta = await fetch(`${base}/api/auth/yo`);
+  assert.equal(respuesta.status, 401);
+  assert.equal(respuesta.headers.get('cache-control'), 'no-store');
+  assert.equal(respuesta.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(respuesta.headers.get('x-frame-options'), 'DENY');
+  assert.match(respuesta.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
+});
+
+test('el acceso rechaza credenciales mal formadas y cuerpos demasiado grandes', async () => {
+  assert.equal((await api('/api/auth/login', { method: 'POST', json: { email: {}, password: [] } })).estado, 401);
+  assert.equal((await api('/api/auth/login', { method: 'POST', json: { email: 'a@b.test', password: 'a'.repeat(110_000) } })).estado, 413);
+});
+
 test('flujo completo: registro → anclaje → verificación → fraude detectado', async () => {
-  const token = await login('analista@lab001.test');
-  assert.ok(token);
+  const sesion = await login('analista@lab001.test');
+  assert.ok(sesion);
 
   // Registrar lote
   const lote = await api('/api/lotes', {
     method: 'POST',
-    token,
+    sesion,
     json: { codigo: 'lt-2026-0457', tipo_mineral: 'Concentrado de estaño', peso_kg: '12500', origen: 'Cooperativa Minera X' },
   });
   assert.equal(lote.estado, 201, JSON.stringify(lote.cuerpo));
@@ -77,7 +93,7 @@ test('flujo completo: registro → anclaje → verificación → fraude detectad
   form.set('pureza', '75');
   form.set('composicion', JSON.stringify({ Sn: '75', Pb: '4.1', Ag: '0.8', otros: '20.1' }));
   form.set('pdf', new Blob([new Uint8Array(pdfSimple('Informe', ['Pureza 75 %']))], { type: 'application/pdf' }), 'informe.pdf');
-  const registro = await api('/api/analisis', { method: 'POST', token, body: form });
+  const registro = await api('/api/analisis', { method: 'POST', sesion, body: form });
   assert.equal(registro.estado, 201, JSON.stringify(registro.cuerpo));
   assert.equal(registro.cuerpo.pureza, '75.00');
   const analisisId = registro.cuerpo.analisis_id;
@@ -100,7 +116,7 @@ test('flujo completo: registro → anclaje → verificación → fraude detectad
   await assert.rejects(db.query('DELETE FROM analisis'), /no se pueden borrar/);
 
   // Un intermediario desactiva la protección y cambia 75 → 95 (y recalcula el hash local)
-  const fraude = await api('/api/demo/alterar', { method: 'POST', token, json: { analisis_id: analisisId, pureza: '95' } });
+  const fraude = await api('/api/demo/alterar', { method: 'POST', sesion, json: { analisis_id: analisisId, pureza: '95' } });
   assert.equal(fraude.estado, 200, JSON.stringify(fraude.cuerpo));
 
   publico = await api('/api/publico/lotes/LT-2026-0457');
@@ -114,8 +130,8 @@ test('las correcciones crean versiones enlazadas y solo las registra un supervis
   const analista = await login('analista@lab001.test');
   const supervisor = await login('supervisor@lab001.test');
 
-  await api('/api/lotes', { method: 'POST', token: analista, json: { tipo_mineral: 'Plata', peso_kg: '500', origen: 'Oruro' } });
-  const { cuerpo: lotes } = await api('/api/lotes', { token: analista });
+  await api('/api/lotes', { method: 'POST', sesion: analista, json: { tipo_mineral: 'Plata', peso_kg: '500', origen: 'Oruro' } });
+  const { cuerpo: lotes } = await api('/api/lotes', { sesion: analista });
   const loteId = lotes.find((l: any) => l.origen === 'Oruro').id;
   assert.match(loteId, /^LT-\d{4}-\d{4}$/);
 
@@ -130,17 +146,17 @@ test('las correcciones crean versiones enlazadas y solo las registra un supervis
   };
   const f1 = datos();
   f1.set('pdf', new Blob([new Uint8Array(pdfSimple('Informe', ['v1']))]), 'v1.pdf');
-  const v1 = await api('/api/analisis', { method: 'POST', token: analista, body: f1 });
+  const v1 = await api('/api/analisis', { method: 'POST', sesion: analista, body: f1 });
   assert.equal(v1.estado, 201);
 
   const f2 = datos();
   f2.set('pureza', '61.20');
   f2.set('composicion', JSON.stringify({ Ag: '61.2' }));
   f2.set('motivo_correccion', 'Error de transcripción');
-  const rechazo = await api(`/api/analisis/${v1.cuerpo.analisis_id}/versiones`, { method: 'POST', token: analista, body: f2 });
+  const rechazo = await api(`/api/analisis/${v1.cuerpo.analisis_id}/versiones`, { method: 'POST', sesion: analista, body: f2 });
   assert.equal(rechazo.estado, 403);
 
-  const v2 = await api(`/api/analisis/${v1.cuerpo.analisis_id}/versiones`, { method: 'POST', token: supervisor, body: f2 });
+  const v2 = await api(`/api/analisis/${v1.cuerpo.analisis_id}/versiones`, { method: 'POST', sesion: supervisor, body: f2 });
   assert.equal(v2.estado, 201, JSON.stringify(v2.cuerpo));
   assert.equal(v2.cuerpo.version, 2);
   assert.equal(v2.cuerpo.hash_anterior, v1.cuerpo.hash);
@@ -154,7 +170,7 @@ test('las correcciones crean versiones enlazadas y solo las registra un supervis
 });
 
 test('rechaza archivos que no son PDF y accesos sin sesión', async () => {
-  const token = await login('analista@lab001.test');
+  const sesion = await login('analista@lab001.test');
   const f = new FormData();
   f.set('lote_id', 'LT-2026-0457');
   f.set('fecha_analisis', '2026-09-15T14:30:00Z');
@@ -162,7 +178,7 @@ test('rechaza archivos que no son PDF y accesos sin sesión', async () => {
   f.set('pureza', '70');
   f.set('composicion', JSON.stringify({ Sn: '70' }));
   f.set('pdf', new Blob(['no soy un pdf']), 'falso.pdf');
-  assert.equal((await api('/api/analisis', { method: 'POST', token, body: f })).estado, 400);
+  assert.equal((await api('/api/analisis', { method: 'POST', sesion, body: f })).estado, 400);
   assert.equal((await api('/api/analisis')).estado, 401);
   assert.equal((await api('/api/publico/lotes/NO-EXISTE')).estado, 404);
 });

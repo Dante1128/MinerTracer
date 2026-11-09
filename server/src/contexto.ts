@@ -21,8 +21,10 @@ export interface Usuario {
 
 export class ErrorHttp extends Error {
   estado: number;
-  constructor(estado: number, mensaje: string) {
+  codigo?: string;
+  constructor(estado: number, mensaje: string, codigo?: string) {
     super(mensaje);
     this.estado = estado;
+    this.codigo = codigo;
   }
 }

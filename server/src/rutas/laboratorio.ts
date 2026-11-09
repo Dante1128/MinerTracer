@@ -1,11 +1,10 @@
-import bcrypt from 'bcryptjs';
 import { Router, type Request } from 'express';
 import multer from 'multer';
 import { ErrorContrato, VERSION_DUPLICADA } from '../anclaje/erroresContrato.ts';
 import { marcarAnclado, solicitudDeAnalisis } from '../anclaje/procesador.ts';
-import { firmarToken, requiereSesion, usuarioDe } from '../auth.ts';
+import { requiereSesion, usuarioDe } from '../auth.ts';
 import { config } from '../config.ts';
-import { ErrorHttp, type Contexto, type Usuario } from '../contexto.ts';
+import { ErrorHttp, type Contexto } from '../contexto.ts';
 import { validarCuenta } from '../mercado/mercado.ts';
 import { registrarAnalisis, registrarCorreccion, registrarLote, type PdfSubido } from '../servicios/registro.ts';
 import { publico, verificarAnalisis } from '../servicios/verificacion.ts';
@@ -19,23 +18,7 @@ const pdfDe = (archivo: Express.Multer.File | undefined): PdfSubido | null =>
 export function rutasLaboratorio(ctx: Contexto) {
   const r = Router();
 
-  r.post('/auth/login', async (req, res) => {
-    const { email, password } = req.body ?? {};
-    const [fila] = await ctx.db.query('SELECT * FROM usuarios WHERE email = $1', [String(email ?? '').trim().toLowerCase()]);
-    if (!fila || !(await bcrypt.compare(String(password ?? ''), fila.password_hash))) {
-      throw new ErrorHttp(401, 'Correo o contraseña incorrectos');
-    }
-    const usuario: Usuario = {
-      id: fila.id,
-      email: fila.email,
-      nombre: fila.nombre,
-      rol: fila.rol,
-      laboratorio_id: fila.laboratorio_id,
-    };
-    res.json({ token: firmarToken(usuario), usuario });
-  });
-
-  r.use(['/auth/yo', '/lotes', '/analisis'], requiereSesion);
+  r.use(['/auth/yo', '/lotes', '/analisis'], requiereSesion(ctx.db));
 
   r.get('/auth/yo', async (req, res) => {
     const usuario = usuarioDe(req);
