@@ -9,13 +9,32 @@ export function Mercado() {
   const info = useInfoMercado();
   const [lotes, setLotes] = useState<EstadoComercial[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busqueda, setBusqueda] = useState('');
+  const [orden, setOrden] = useState('original');
+  const [recarga, setRecarga] = useState(0);
 
   useEffect(() => {
     if (!info?.habilitado) return;
+    let vigente = true;
+    setError(null);
+    setLotes(null);
     api<EstadoComercial[]>('/mercado/lotes')
-      .then(setLotes)
-      .catch((e) => setError(e instanceof ErrorApi ? e.message : 'No se pudo leer el contrato'));
-  }, [info]);
+      .then((datos) => { if (vigente) setLotes(datos); })
+      .catch((e) => { if (vigente) setError(e instanceof ErrorApi ? e.message : 'No se pudo leer el contrato'); });
+    return () => { vigente = false; };
+  }, [info, recarga]);
+
+  const normalizar = (texto: string) => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
+  const consulta = normalizar(busqueda.trim());
+  const visibles = (lotes ?? []).filter((lote) =>
+    normalizar([lote.lote_id, lote.tipo_mineral, lote.origen, lote.laboratorio?.nombre].filter(Boolean).join(' ')).includes(consulta),
+  );
+  if (orden !== 'original') {
+    visibles.sort((a, b) => {
+      const diferencia = (a.venta?.pureza_bps ?? a.pureza_bps) - (b.venta?.pureza_bps ?? b.pureza_bps);
+      return orden === 'pureza-asc' ? diferencia : -diferencia;
+    });
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
@@ -32,7 +51,10 @@ export function Mercado() {
           El mercado necesita el anclaje en Stellar. Este servidor usa el anclaje simulado (ANCLAJE=mock).
         </p>
       ) : error ? (
-        <p className="tarjeta mt-8 p-6 text-red-700">{error}</p>
+        <div className="tarjeta mt-8 space-y-3 p-6">
+          <p role="alert" className="text-red-700">{error}</p>
+          <button className="boton-secundario" onClick={() => setRecarga((n) => n + 1)}>Reintentar</button>
+        </div>
       ) : lotes === null ? (
         <p className="mt-8 text-stone-500">Leyendo los lotes en venta del contrato…</p>
       ) : lotes.length === 0 ? (
@@ -40,8 +62,30 @@ export function Mercado() {
           No hay lotes en venta por ahora. Los dueños publican sus lotes desde <Link to="/mis-lotes" className="font-medium text-mineral-700 hover:underline">Mis lotes</Link>.
         </p>
       ) : (
+        <>
+        <div className="tarjeta mt-8 grid gap-4 p-5 sm:grid-cols-2">
+          <div>
+            <label className="etiqueta" htmlFor="buscar-lotes">Buscar lotes</label>
+            <input id="buscar-lotes" type="search" className="campo" placeholder="Código, mineral, origen o laboratorio" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+          </div>
+          <div>
+            <label className="etiqueta" htmlFor="orden-lotes">Ordenar por</label>
+            <select id="orden-lotes" className="campo" value={orden} onChange={(e) => setOrden(e.target.value)}>
+              <option value="original">Orden del mercado</option>
+              <option value="pureza-desc">Mayor pureza</option>
+              <option value="pureza-asc">Menor pureza</option>
+            </select>
+          </div>
+          <p role="status" className="text-sm text-stone-600 sm:col-span-2">{visibles.length} de {lotes.length} lotes en venta</p>
+        </div>
+        {visibles.length === 0 && (
+          <div className="tarjeta mt-4 space-y-3 p-5">
+            <p>No hay lotes que coincidan con su búsqueda.</p>
+            <button className="boton-secundario" onClick={() => setBusqueda('')}>Limpiar búsqueda</button>
+          </div>
+        )}
         <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {lotes.map((l) => (
+          {visibles.map((l) => (
             <Link key={l.lote_id} to={`/mercado/${l.lote_id}`} className="tarjeta block p-5 transition hover:shadow-md">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-mono font-semibold">{l.lote_id}</span>
@@ -63,6 +107,7 @@ export function Mercado() {
             </Link>
           ))}
         </div>
+        </>
       )}
     </div>
   );
