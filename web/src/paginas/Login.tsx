@@ -18,6 +18,7 @@ export function Login() {
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault();
+    if (enviando) return;
     setEnviando(true);
     setError(null);
     try {
@@ -67,7 +68,7 @@ export function Login() {
             {mostrarClave ? 'Ocultar contraseña' : 'Mostrar contraseña'}
           </button>
         </div>
-        {error && <p className="text-sm font-medium text-red-600">{error}</p>}
+        {error && <p role="alert" className="text-sm font-medium text-red-600">{error}</p>}
         <button className="boton-primario w-full" disabled={enviando}>
           {enviando ? 'Ingresando…' : 'Ingresar'}
         </button>
