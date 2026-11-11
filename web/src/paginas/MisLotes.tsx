@@ -18,16 +18,21 @@ import { useWallet } from '../wallet.tsx';
 
 export function MisLotes() {
   const wallet = useWallet();
+  // Al cambiar de cuenta se descartan también los formularios y las transacciones anteriores.
+  return <ContenidoMisLotes key={wallet.direccion ?? 'sin-cuenta'} cuenta={wallet.direccion} />;
+}
+
+function ContenidoMisLotes({ cuenta }: { cuenta: string | null }) {
   const info = useInfoMercado();
   const [lotes, setLotes] = useState<EstadoComercial[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [recarga, setRecarga] = useState(0);
-  const cuenta = wallet.direccion;
 
   useEffect(() => {
     if (!cuenta || !info?.habilitado) return;
     let vigente = true;
     setError(null);
+    setLotes(null);
     api<EstadoComercial[]>(`/mercado/cuentas/${cuenta}/lotes`)
       .then((l) => vigente && setLotes(l))
       .catch((e) => vigente && setError(e instanceof ErrorApi ? e.message : 'No se pudo leer el contrato'));
@@ -55,7 +60,10 @@ export function MisLotes() {
       {info && !info.habilitado ? (
         <p className="tarjeta p-6 text-stone-600">El mercado necesita el anclaje en Stellar (ANCLAJE=stellar).</p>
       ) : !cuenta ? null : error ? (
-        <p className="tarjeta p-6 text-red-700">{error}</p>
+        <div className="tarjeta space-y-3 p-6">
+          <p role="alert" className="text-red-700">{error}</p>
+          <button className="boton-secundario" onClick={() => setRecarga((n) => n + 1)}>Reintentar</button>
+        </div>
       ) : lotes === null || !info ? (
         <p className="text-stone-500">Leyendo sus lotes en el contrato…</p>
       ) : lotes.length === 0 ? (
