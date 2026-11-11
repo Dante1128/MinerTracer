@@ -10,6 +10,7 @@ export function Login() {
   const destino = estado?.desde?.startsWith('/laboratorio') ? estado.desde : '/laboratorio';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [mostrarClave, setMostrarClave] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -49,13 +50,22 @@ export function Login() {
           </label>
           <input
             id="password"
-            type="password"
+            type={mostrarClave ? 'text' : 'password'}
             autoComplete="current-password"
             className="campo"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+          <button
+            type="button"
+            className="mt-2 text-sm text-mineral-700 hover:underline"
+            aria-controls="password"
+            aria-pressed={mostrarClave}
+            onClick={() => setMostrarClave((visible) => !visible)}
+          >
+            {mostrarClave ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+          </button>
         </div>
         {error && <p className="text-sm font-medium text-red-600">{error}</p>}
         <button className="boton-primario w-full" disabled={enviando}>
