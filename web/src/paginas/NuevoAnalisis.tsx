@@ -94,12 +94,16 @@ export function NuevoAnalisis() {
         ← Volver
       </Link>
       <h1 className="mt-2 text-3xl font-bold tracking-tight">Registrar análisis</h1>
-      <p className="mt-1 text-stone-600">
+      <p className="mt-2 text-stone-600">Elija el lote, copie los resultados del informe y adjunte el PDF.</p>
+      <details className="mt-4 rounded-xl border border-stone-200 bg-white p-4">
+        <summary className="cursor-pointer text-sm font-medium">¿Cómo se guarda y firma el análisis?</summary>
+      <p className="mt-3 text-sm text-stone-600">
         {firmaWallet
           ? 'Al guardar, el sistema calcula la huella del análisis; después la firma con la wallet del laboratorio (Freighter) para anclarla en Stellar. No podrá modificarse después;'
           : 'Al guardar, el sistema calcula la huella del análisis y la ancla automáticamente. No podrá modificarse después;'}
         las correcciones se registran como nuevas versiones.
       </p>
+      </details>
 
       <form onSubmit={enviar} className="mt-8 space-y-6">
         <section className="tarjeta p-6">
@@ -114,7 +118,9 @@ export function NuevoAnalisis() {
 
           {crearLote ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <div>
+              <details className="sm:col-span-2 rounded-lg border border-stone-200 p-3" open={erroresLote.codigo ? true : undefined}>
+                <summary className="cursor-pointer text-sm font-medium">Personalizar código del lote (opcional)</summary>
+                <p className="my-2 text-xs text-stone-500">Si lo deja vacío, se genera automáticamente.</p>
                 <label className="etiqueta" htmlFor="codigo">
                   Código del lote (opcional)
                 </label>
@@ -126,7 +132,7 @@ export function NuevoAnalisis() {
                   onChange={(e) => setLote('codigo', e.target.value)}
                 />
                 <MensajeError texto={erroresLote.codigo} />
-              </div>
+              </details>
               <div>
                 <label className="etiqueta" htmlFor="tipo_mineral">
                   Tipo de mineral
@@ -155,7 +161,8 @@ export function NuevoAnalisis() {
                 />
                 <MensajeError texto={erroresLote.peso_kg} />
               </div>
-              <div>
+              <details className="rounded-lg border border-stone-200 p-3" open={erroresLote.coordenadas ? true : undefined}>
+                <summary className="cursor-pointer text-sm font-medium">Agregar ubicación GPS (opcional)</summary>
                 <label className="etiqueta" htmlFor="coordenadas">
                   Coordenadas (opcional)
                 </label>
@@ -167,7 +174,7 @@ export function NuevoAnalisis() {
                   onChange={(e) => setLote('coordenadas', e.target.value)}
                 />
                 <MensajeError texto={erroresLote.coordenadas} />
-              </div>
+              </details>
               <div className="sm:col-span-2">
                 <label className="etiqueta" htmlFor="origen">
                   Origen (cooperativa, mina, localidad)
@@ -182,7 +189,9 @@ export function NuevoAnalisis() {
                 />
                 <MensajeError texto={erroresLote.origen} />
               </div>
-              <div className="sm:col-span-2">
+              <details className="sm:col-span-2 rounded-lg border border-stone-200 p-3" open={erroresLote.dueno ? true : undefined}>
+                <summary className="cursor-pointer text-sm font-medium">Asignar otro dueño (opcional)</summary>
+                <p className="my-2 text-xs text-stone-500">Por defecto, el lote queda a nombre del laboratorio.</p>
                 <label className="etiqueta" htmlFor="dueno">
                   Dirección Stellar del dueño (opcional)
                 </label>
@@ -199,15 +208,15 @@ export function NuevoAnalisis() {
                   Cuenta que podrá vender el lote en el marketplace. Si la deja vacía, el lote queda a nombre del laboratorio.
                 </p>
                 <MensajeError texto={erroresLote.dueno} />
-              </div>
+              </details>
             </div>
           ) : (
             <div>
               <label className="etiqueta" htmlFor="lote">
                 Lote analizado
               </label>
-              <select id="lote" className="campo" value={loteId} onChange={(e) => setLoteId(e.target.value)} required>
-                <option value="">Seleccione…</option>
+              <select disabled={cargandoLotes} id="lote" className="campo" value={loteId} onChange={(e) => setLoteId(e.target.value)} required>
+                <option value="">{cargandoLotes ? 'Cargando lotes…' : 'Elija el lote de su informe'}</option>
                 {lotes.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.id} — {l.tipo_mineral} ({l.origen})
@@ -223,13 +232,14 @@ export function NuevoAnalisis() {
           <CamposAnalisis datos={datos} cambiar={setDatos} errores={errores} pdfObligatorio />
         </section>
 
-        {mensaje && <p className="rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{mensaje}</p>}
+        <p className="rounded-xl bg-mineral-50 p-4 text-sm text-stone-700">Revise los resultados y el PDF antes de guardar. Las correcciones se registrarán como nuevas versiones para conservar el historial.</p>
+        {mensaje && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm font-medium text-red-700">{mensaje}</p>}
         <div className="flex justify-end gap-3">
           <Link to="/laboratorio" className="boton-secundario">
             Cancelar
           </Link>
           <button className="boton-primario" disabled={enviando || cargandoLotes}>
-            {enviando ? 'Registrando…' : firmaWallet ? 'Registrar y continuar a la firma' : 'Registrar y anclar'}
+            {enviando ? 'Guardando…' : firmaWallet ? 'Guardar y firmar' : 'Guardar análisis'}
           </button>
         </div>
       </form>
