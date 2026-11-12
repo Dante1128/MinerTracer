@@ -16,6 +16,7 @@ export function Panel() {
   const [pestana, setPestana] = useState<'analisis' | 'lotes'>('analisis');
   const [error, setError] = useState<string | null>(null);
   const [recarga, setRecarga] = useState(0);
+  const [busqueda, setBusqueda] = useState('');
 
   useEffect(() => {
     let vigente = true;
@@ -40,6 +41,9 @@ export function Panel() {
   }, [recarga, firmaWallet]);
 
   const pendientes = analisis?.filter((a) => a.estado_anclaje === 'pendiente').length ?? 0;
+  const consulta = busqueda.trim().toLocaleLowerCase('es');
+  const analisisFiltrados = analisis?.filter((a) => [a.analisis_id, a.lote_id, a.tipo_mineral, a.analista_nombre].some((valor) => valor?.toLocaleLowerCase('es').includes(consulta))) ?? [];
+  const lotesFiltrados = lotes.filter((l) => [l.id, l.tipo_mineral, l.origen].some((valor) => valor.toLocaleLowerCase('es').includes(consulta)));
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
@@ -91,12 +95,20 @@ export function Panel() {
         ))}
       </div>
 
+      <div className="mt-4">
+        <label className="etiqueta" htmlFor="buscar-registros">Buscar {pestana === 'analisis' ? 'análisis' : 'lotes'}</label>
+        <input id="buscar-registros" type="search" className="campo" placeholder="Código, mineral o lote…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+        {consulta && <p className="mt-2 text-sm text-stone-500" role="status">{pestana === 'analisis' ? analisisFiltrados.length : lotesFiltrados.length} resultados</p>}
+      </div>
+
       {pestana === 'analisis' ? (
         <div className="tarjeta mt-4 overflow-x-auto">
           {analisis === null ? (
             <p className="p-6 text-stone-500">{error ? 'Sin datos.' : 'Cargando…'}</p>
           ) : analisis.length === 0 ? (
             <p className="p-6 text-stone-500">Aún no hay análisis. Registre el primero.</p>
+          ) : analisisFiltrados.length === 0 ? (
+            <p className="p-6 text-stone-500">No hay coincidencias. Pruebe con otro código o mineral.</p>
           ) : (
             <table className="w-full text-left text-sm">
               <thead className="border-b border-stone-200 text-xs text-stone-500 uppercase">
@@ -109,7 +121,7 @@ export function Panel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {analisis.map((a) => (
+                {analisisFiltrados.map((a) => (
                   <tr key={a.analisis_id} className="hover:bg-stone-50">
                     <td className="px-4 py-3">
                       <Link to={`/laboratorio/analisis/${a.analisis_id}`} className="font-mono font-semibold hover:underline">
@@ -135,7 +147,8 @@ export function Panel() {
       ) : (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {lotes.length === 0 && <p className="text-stone-500">Aún no hay lotes.</p>}
-          {lotes.map((l) => (
+          {lotes.length > 0 && lotesFiltrados.length === 0 && <p className="text-stone-500">No hay coincidencias. Pruebe con otro código o mineral.</p>}
+          {lotesFiltrados.map((l) => (
             <div key={l.id} className="tarjeta p-4">
               <div className="flex items-center justify-between">
                 <span className="font-mono font-semibold">{l.id}</span>
