@@ -147,14 +147,14 @@ export function CamposAnalisis({
           {datos.composicion.map((fila, i) => (
             <div key={i} className="flex gap-2">
               <input
-                aria-label="Símbolo químico"
+                aria-label={`Elemento ${i + 1}`}
                 className="campo w-28 font-mono"
-                placeholder="Sn"
+                placeholder="Au, Ag…"
                 value={fila.elemento}
                 onChange={(e) => setFila(i, 'elemento', e.target.value)}
               />
               <input
-                aria-label="Porcentaje"
+                aria-label={`Porcentaje del elemento ${i + 1}`}
                 inputMode="decimal"
                 className="campo font-mono"
                 placeholder="0.00"
@@ -180,13 +180,14 @@ export function CamposAnalisis({
         >
           + Agregar elemento
         </button>
-        <p className="mt-1 text-xs text-stone-500">Símbolos químicos (Sn, Ag, Pb, Zn…) o "otros". Hasta 2 decimales.</p>
+        <p className="mt-1 text-xs text-stone-500">Copie los elementos del informe: Au (oro), Ag (plata), Sn (estaño) u "otros". Hasta 2 decimales.</p>
         {erroresComposicion.map((e) => (
           <MensajeError key={e} texto={e} />
         ))}
       </div>
 
-      <div className="sm:col-span-2">
+      <details className="sm:col-span-2 rounded-lg border border-stone-200 p-3" open={errores.observaciones ? true : undefined}>
+        <summary className="cursor-pointer text-sm font-medium">Agregar observaciones (opcional)</summary>
         <label className="etiqueta" htmlFor="observaciones">
           Observaciones
         </label>
@@ -198,7 +199,7 @@ export function CamposAnalisis({
           onChange={(e) => set('observaciones', e.target.value)}
         />
         <MensajeError texto={errores.observaciones} />
-      </div>
+      </details>
 
       <div className="sm:col-span-2">
         <label className="etiqueta" htmlFor="pdf">
@@ -213,8 +214,10 @@ export function CamposAnalisis({
           required={pdfObligatorio}
         />
         <p className="mt-1 text-xs text-stone-500">
-          Se calcula su huella SHA-256 y queda sellada en el registro: cualquier cambio posterior en el archivo se detecta.
+          Adjunte el informe que respalda estos resultados. El sistema permite detectar cambios posteriores en el archivo.
         </p>
+        {datos.pdf && <p className="mt-2 text-sm text-mineral-700" role="status">Informe seleccionado: {datos.pdf.name}</p>}
+        <MensajeError texto={errores.pdf} />
       </div>
     </div>
   );
