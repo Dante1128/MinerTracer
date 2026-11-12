@@ -20,11 +20,10 @@ export function datosIniciales(base?: Analisis): DatosFormularioAnalisis {
   if (!base) {
     return {
       fecha_analisis: aLocal(new Date()),
-      metodo: 'FRX',
+      metodo: '',
       pureza: '',
       composicion: [
         { elemento: '', porcentaje: '' },
-        { elemento: 'otros', porcentaje: '' },
       ],
       observaciones: '',
       pdf: null,
@@ -107,6 +106,7 @@ export function CamposAnalisis({
         <input
           id="metodo"
           list="metodos"
+          placeholder="Elija o escriba el método del informe"
           className="campo"
           value={datos.metodo}
           onChange={(e) => set('metodo', e.target.value)}
