@@ -8,15 +8,18 @@ app_port: 7860
 pinned: false
 ---
 
-# MinerTrace — Fase 1
+# MinerTrace — comercialización P2P con análisis verificables
 
 Trazabilidad e integridad de análisis minerales. El diseño completo está en [MinerTrace.md](MinerTrace.md).
 Para usar y presentar la aplicación (vistas, credenciales, wallet, transacciones y guiones de demo), vea [GUIA.md](GUIA.md);
-para la explicación técnica de la capa blockchain (Stellar, contrato Soroban, hashing, firmas), vea [TECNICO.md](TECNICO.md);
-para cómo se reparte el código en Modelo-Vista-Controlador, vea [ARQUITECTURA.md](ARQUITECTURA.md).
+para la explicación técnica de la capa blockchain (Stellar, contrato Soroban, hashing, firmas), vea [TECNICO.md](TECNICO.md).
+La organización de modelos, controladores y vistas está en [ARQUITECTURA.md](ARQUITECTURA.md).
 
-Esta fase incluye la aplicación web completa y el backend, con el hashing real (RFC 8785 + SHA-256).
-El **anclaje en Stellar está simulado** (`AnclajeMock`); ver la sección 17 del documento para la Fase 2.
+Incluye anuncios de compra y venta, ofertas, acuerdos con importes explícitos, pago en garantía,
+recepción y resolución de incidencias, apoyados por informes de laboratorio verificables.
+Con `ANCLAJE=mock` se simula el anclaje; con `ANCLAJE=stellar` el contrato Soroban opera en **testnet**.
+La capa comercial v2 requiere un contrato nuevo con `get_comercio().version = 2`; el diseño inicial de
+`MinerTrace.md` conserva referencias a fases anteriores.
 
 ## Arranque rápido
 
@@ -43,7 +46,36 @@ Para usar el PostgreSQL local, cree la base y defina `DATABASE_URL` en `server/.
 # DATABASE_URL=postgres://postgres:CONTRASEÑA@localhost:5432/minertrace
 ```
 
-Para empezar de cero con PGlite, borre `server/datos/`.
+Conserve las bases de datos anteriores. Para probar otro contrato use una carpeta nueva mediante el
+lanzador comercial siguiente; nunca mezcle registros anclados a contratos distintos.
+
+### Arranque comercial aislado
+
+Necesita las dependencias instaladas, Freighter en Testnet y las cuentas de laboratorio existentes en
+`server/.env` (`STELLAR_CUENTA_LAB_001/002` o sus claves de desarrollo). El lanzador reutiliza esa
+configuración sin mostrar claves ni modificar el archivo.
+
+```powershell
+# Usa el contrato comercial de demostración guardado en scripts/comercio-testnet.json:
+npm run dev:comercio
+
+# Para crear OTRO contrato (por ejemplo, tras un reinicio de testnet):
+npm run contrato:desplegar
+# El despliegue actualiza la referencia pública; también puede indicar otro ID explícitamente:
+$env:COMERCIO_CONTRATO_ID="C..."
+npm run dev:comercio
+```
+
+Abra `http://localhost:5173/comercio`. La referencia incluida se desplegó el 26 de noviembre de 2026 en
+[Stellar Testnet](https://stellar.expert/explorer/testnet/contract/CDW23R3BPE3UAV3E7ZMUTEIP2PFM4KDYNDIQCCPRPJWEQS634XMQWNYP).
+Los reinicios de testnet pueden invalidarla. En PowerShell puede usar `npm.cmd` si la política local bloquea `npm.ps1`.
+
+El lanzador crea o reutiliza `server/datos-comercio-<identificador-corto>/`, fuerza PGlite y transmite al
+proceso hijo `ANCLAJE=stellar` y el contrato indicado. **No escribe `.env`, no borra datos y no usa la
+base PostgreSQL que pudiera tener configurada.** Para volver a una demo anterior, detenga los procesos y
+arranque con su configuración anterior. Detenga la vista previa antes de iniciar otra API sobre la misma
+carpeta PGlite: esa base embebida debe usarse desde un único proceso. Cambiar únicamente el código local
+no actualiza un contrato desplegado.
 
 ### Producción (un solo proceso)
 
@@ -76,18 +108,19 @@ Solo está disponible con `DEMO_ALTERAR=true` y nunca con `NODE_ENV=production`.
 
 ```
 server/src/
-  modelos/                   Modelo: acceso a las tablas (lotes, analisis, contra_analisis, usuarios, laboratorios)
-  db/esquema.ts              Modelo: tablas + triggers de solo inserción
-  controladores/             Controlador: HTTP de cada handler (recibe la petición, llama servicios/modelos, responde)
-  rutas/                     Controlador: mapeo URL → controlador (middlewares, Multer, Router)
-  servicios/registro.ts      Controlador (negocio): alta de lotes, análisis y correcciones (versiones)
-  servicios/verificacion.ts  Controlador (negocio): recalcula hash, consulta el anclaje, valida la firma y el PDF
+  modelos/                  consultas del laboratorio por entidad
+  controladores/            validación HTTP y respuestas de la API
+  comercio/                 perfiles, anuncios, negociación, evidencias y cálculos del comercio v2
   integridad/canonico.ts     registro canónico, JCS (RFC 8785), SHA-256, salt
   anclaje/ServicioAnclaje.ts interfaz fija del servicio de anclaje
   anclaje/AnclajeMock.ts     anclaje simulado (ANCLAJE=mock)
   anclaje/AnclajeStellar.ts  anclaje en el contrato Soroban de testnet (ANCLAJE=stellar)
   anclaje/procesador.ts      anclaje asíncrono con reintentos y espera exponencial
-web/src/                     Vista: SPA en React que consume la API JSON (ver ARQUITECTURA.md)
+  servicios/registro.ts      alta de lotes, análisis y correcciones (versiones)
+  servicios/verificacion.ts  recalcula hash, consulta el anclaje, valida la firma y el PDF
+  db/esquema.ts              tablas + triggers de solo inserción
+  rutas/                     URLs y middlewares del laboratorio, comercio y verificación pública
+web/src/
   paginas/                   Inicio, Verificar, ResultadoLote, Login, Panel, NuevoAnalisis, DetalleAnalisis
   componentes/               formulario de análisis, escáner QR, verificación, insignias
 server/src/mercado/          marketplace: estado comercial desde el contrato, transacciones para la wallet, indexador de eventos
@@ -120,7 +153,7 @@ npm run contrato:test  # pruebas del contrato Soroban (cargo test)
 npm run test:testnet   # integración real contra el contrato en testnet (ver "Anclaje real")
 ```
 
-## Fase 2: contrato Soroban (`contracts/minertrace`)
+## Contrato Soroban y comercio v2 (`contracts/minertrace`)
 
 Un solo contrato, en Rust con `soroban-sdk` 28, que hace dos cosas:
 
@@ -130,16 +163,27 @@ Un solo contrato, en Rust con `soroban-sdk` 28, que hace dos cosas:
   Las versiones nunca se sobrescriben: la versión N+1 debe apuntar al hash de la N y venir del mismo laboratorio.
   La versión 1 crea el lote con su dueño.
 - **Marketplace con garantía.** Estados del lote: `Certificado → EnVenta → EnGarantia → Vendido`, o `EnDisputa`.
-  1. El dueño publica el lote con un precio (`list_batch`).
-  2. El comprador paga al contrato, que retiene el dinero (`buy`).
+  1. Las partes negocian en `/comercio`; el vendedor firma el acuerdo y reserva el lote (`reservar_venta`).
+     El catálogo de precio fijo conserva `list_batch`.
+  2. El comprador financia precio + comisión con `financiar_orden`, que comprueba orden, total,
+     análisis y versión esperados. El contrato retiene ambos importes y empieza el plazo de entrega.
   3. Un laboratorio distinto del que certificó el lote puede registrar un contra-análisis (`counter_analysis`).
      Si la pureza difiere más que la tolerancia, el lote pasa a `EnDisputa`.
-  4. Sin disputa, el comprador confirma (`confirm`): el vendedor cobra y el lote cambia de dueño.
-     En disputa, el comprador recupera el dinero (`refund`) y el lote queda bloqueado hasta que el laboratorio
-     cuyo resultado se discutió registre un análisis nuevo.
-  5. **Plazo de la garantía:** si el comprador no confirma ni hay disputa antes de que venza el plazo
-     (7 días por defecto, contados desde la compra), el vendedor puede cobrar (`claim`) y el lote pasa al
-     comprador, igual que si hubiera confirmado. En disputa no se puede cobrar: solo cabe el reembolso.
+  4. El comprador registra recepción o el laboratorio certificador atestigua la entrega. Desde ese momento
+     empieza el plazo de inspección. Sin disputa, `confirm` reconoce recepción y libera el pago.
+  5. Vencida la inspección (7 días por defecto) con recepción acreditada y sin disputa, el vendedor cobra con
+     `claim`. Sin entrega, vencido su plazo (24 horas por defecto), el comprador puede cancelar si no hay
+     recepción, contra-análisis ni incidencia física.
+  6. Una discrepancia de pureza exige devolución acreditada antes de `refund`; una incidencia física necesita
+     arbitraje del administrador. El reembolso devuelve precio + comisión. Una disputa por pureza mantiene
+     bloqueado el lote hasta una nueva certificación del laboratorio correspondiente.
+
+La comisión del comprador es **1 %**, con mínimo de **20 unidades del token de pago** en el despliegue por
+defecto. Al completar la venta, el vendedor puede recibir una ayuda al ensayo de hasta **0,25 % del precio**,
+limitada por gasto acreditado por el laboratorio, máximo de **100 tokens** y comisión disponible. Se paga
+una sola vez por lote. El vendedor recibe precio + ayuda; la plataforma, comisión − ayuda. No se paga ayuda
+ni comisión a la plataforma si hay reembolso. El gas de Stellar y los gastos externos se muestran separados.
+Si el token es XLM, los importes son XLM de testnet: **no son bolivianos ni hay conversión implícita**.
 
 El pago usa la interfaz estándar de tokens de Soroban: en testnet, el contrato del XLM nativo. Para usar otro token,
 como USDC, basta con indicar su contrato al desplegar. Los errores son un enum tipado (`Error`), cada acción emite
@@ -151,27 +195,39 @@ Requisitos: Rust con el target `wasm32v1-none` y el [Stellar CLI](https://develo
 
 ```bash
 rustup target add wasm32v1-none
-npm run contrato:test        # 15 pruebas
+npm run contrato:test        # pruebas del contrato y sus reglas comerciales
 npm run contrato:desplegar   # cuentas de prueba + despliegue + laboratorios autorizados
 ```
 
 El script:
 
-1. Crea con friendbot, o reutiliza, diez identidades del CLI: `minertrace-admin`, `minertrace-lab-a`,
-   `minertrace-lab-b`, seis vendedores (`minertrace-vendedor-huanuni`, `-potosi`, `-tipuani`, `-sansimon`,
-   `-colquiri`, `-chojlla`: cada cooperativa es un vendedor distinto, para poder elegir entre varios en el
-   mercado) y `minertrace-comprador`. Sus claves quedan en la configuración global del CLI (`~/.config/stellar`),
-   no en el repositorio. Para ver una: `stellar keys secret <nombre>`.
+1. Crea con friendbot, o reutiliza, las identidades del CLI `minertrace-admin`, `minertrace-lab-a`,
+   `minertrace-lab-b`, `minertrace-vendedor`, `minertrace-comprador` y seis vendedores adicionales de demostración
+   (`minertrace-vendedor-huanuni`, `-potosi`, `-tipuani`, `-sansimon`, `-colquiri`, `-chojlla`). Los nombres de
+   cooperativas son ejemplos sintéticos, sin verificación de identidad. Sus claves quedan en la configuración
+   global del CLI (`~/.config/stellar`), no en el repositorio. Para ver una: `stellar keys secret <nombre>`.
 2. Compila el contrato y lo despliega. El constructor recibe el admin, el token y la tolerancia.
-3. Autoriza los dos laboratorios e imprime el `CONTRACT_ID`.
+3. Configura el comercio v2, autoriza los dos laboratorios e imprime el `CONTRACT_ID`.
 
 Variables opcionales: `TOKEN_CONTRATO` (contrato del token; por defecto, el XLM nativo), `TOLERANCIA_BPS`
 (por defecto 200, es decir 2.00 %) y `PLAZO_GARANTIA_DIAS` (por defecto 7) o `PLAZO_GARANTIA_SEG` (en segundos;
 por ejemplo 20 para probar el cobro por vencimiento con `test-testnet/garantia.testnet.test.ts`, que con un plazo
-largo se omite).
+largo se omite). `PLAZO_ENTREGA_SEG` cambia el plazo de entrega; `COMISION_MINIMA_TOKEN` y
+`REINTEGRO_MAXIMO_TOKEN` expresan mínimo y tope en el token configurado; el script consulta sus decimales
+y convierte exactamente a unidades mínimas. `DESTINATARIO_PLATAFORMA` elige la cuenta pública receptora
+de la comisión neta. Estas variables se exportan al entorno del comando de despliegue; están documentadas
+en `server/.env.example`.
 
-El contrato no se puede modificar una vez desplegado: si cambia su código, vuelva a desplegarlo y actualice
-`STELLAR_CONTRATO_ID` (y empiece con una base de datos nueva).
+`TOKEN_NATIVO=false` habilita el activo **USDC de prueba emitido por el script**; no representa dólares reales
+ni el USDC de un emisor comercial. Se crean las líneas de confianza de las cuentas demo y de la plataforma.
+Si esta última es una wallet externa, su dueño debe preparar y autorizar su línea antes del despliegue.
+El valor por defecto sigue siendo XLM; la demo comercial de 2.000 XLM usa el contrato de referencia existente.
+El recorrido validado en red usa XLM; la opción de USDC sintético conserva pendiente su validación en Testnet.
+
+El contrato no tiene actualización de código: si cambia su lógica, despliegue uno nuevo. Use
+`npm run dev:comercio` para conservar la base anterior y crear otra aislada. Las tarifas y destinatario sí
+pueden configurarse por el administrador; solo afectan publicaciones futuras. Las condiciones ya
+publicadas quedan congeladas.
 
 Testnet se reinicia periódicamente y borra cuentas y contratos. Si pasa, vuelva a ejecutar el script:
 refondea las mismas identidades y despliega un contrato nuevo.
@@ -189,9 +245,9 @@ El enlace de cada transacción lleva a stellar.expert (testnet).
    STELLAR_CONTRATO_ID=C...                 # el que imprimió el script
    STELLAR_SECRETO_LAB_001=S...             # stellar keys secret minertrace-lab-a
    STELLAR_SECRETO_LAB_002=S...             # stellar keys secret minertrace-lab-b
-   STELLAR_DUENO_DEMO=G...                  # opcional: stellar keys public-key minertrace-vendedor-potosi
+   STELLAR_DUENO_DEMO=G...                  # opcional: stellar keys public-key minertrace-vendedor
    ```
-3. Use una base de datos nueva (otro `DATOS_DIR` o borre `server/datos/`): las cuentas de los laboratorios
+3. Use una base de datos nueva (otro `DATOS_DIR`, conservando el anterior): las cuentas de los laboratorios
    sembrados en modo mock no son las de testnet.
 4. `npm run dev`. La semilla ancla el lote de ejemplo en el contrato en unos segundos.
 
@@ -207,23 +263,31 @@ duplica nada: encuentra el registro en el contrato y recupera el ID de la transa
 contra el contrato real. Necesita `STELLAR_CONTRATO_ID`, `STELLAR_SECRETO_LAB_001` y `STELLAR_SECRETO_LAB_002`
 y usa códigos de lote y análisis únicos en cada ejecución.
 
-## Marketplace con garantía (requiere `ANCLAJE=stellar`)
+## Pantallas comerciales (requieren `ANCLAJE=stellar` y contrato v2)
 
-Vendedores y compradores no tienen usuario ni contraseña: se identifican con su wallet
-[Freighter](https://www.freighter.app/) en la red **Testnet**.
+Vendedores y compradores conectan [Freighter](https://www.freighter.app/) en **Testnet**, firman un desafío
+de acceso y completan su perfil comercial. La firma de acceso no autoriza pagos; cada operación económica
+requiere otra firma. Las sesiones usan cookies HttpOnly y protección CSRF.
 
 | Ruta | Para | Qué hace |
 |---|---|---|
-| `/mercado` | todos | Directorio de vendedores (laboratorio certificador) + todos los lotes en venta: pureza certificada, precio, estado |
-| `/mercado/vendedor/:id` | todos | Lotes en venta de un solo vendedor: "elegir un vendedor" estilo marketplace |
-| `/mercado/:loteId` | comprador | Verificación completa del análisis + estado comercial + **Comprar** (firma `buy`) |
+| `/comercio` | todos | Anuncios de compra/venta, búsqueda y acceso al intercambio P2P |
+| `/comercio/nuevo` | cuenta comercial | Publicar condiciones, precio y vigencia; venta asociada a un lote certificado |
+| `/comercio/anuncios/:id` | partes | Proponer ofertas, negociar y aceptar un acuerdo |
+| `/comercio/perfil` | cuenta comercial | Identidad comercial y datos de contacto |
+| `/operaciones` y `/operaciones/:id` | comprador/vendedor | Reserva, financiación, importes, entrega, evidencia e incidencias |
+| `/laboratorio/comercio` | laboratorio certificador | Acreditar gasto de ensayo antes de reservar; atestiguar entrega o devolución |
+| `/revision` | administrador del contrato | Revisar incidencias y firmar una resolución explícita |
+| `/mercado` | todos | Directorio de vendedores y lotes en venta leídos del contrato, con acceso a la negociación P2P |
+| `/mercado/vendedor/:id` | todos | Perfil público declarado del vendedor, sus anuncios P2P y sus lotes en venta |
+| `/mercado/:loteId` | comprador | Verificación del análisis y compra con total/análisis esperados (`financiar_orden`) |
 | `/mis-lotes` | dueño / comprador | Publicar con precio (`list_batch`), confirmar la recepción (`confirm`) o pedir el reembolso en disputa (`refund`) |
 | `/laboratorio/contra-analisis` | segundo laboratorio | Contra-análisis de un lote en garantía (`counter_analysis`) |
 | `/verificar/:loteId` | todos | Además del análisis: estado comercial, contra-análisis y línea de tiempo |
 
-**Cómo se firma:** el servidor arma la transacción sin firmar (`POST /api/mercado/transacciones`), Freighter
+**Cómo se firma:** el servidor arma la transacción sin firmar (`POST /api/mercado/comercial/preparar`), Freighter
 la muestra y la firma en el navegador, y el servidor la envía y espera la confirmación
-(`POST /api/mercado/transacciones/enviar`). El servidor nunca ve la clave de la wallet, y solo envía la
+(`POST /api/mercado/comercial/enviar`). El servidor nunca ve la clave de la wallet, y solo envía la
 invocación pedida, a este contrato y desde la cuenta indicada. La web solo carga `@stellar/freighter-api`.
 
 **Estado y línea de tiempo:** el estado comercial siempre se lee del contrato. Un indexador copia los eventos
@@ -234,25 +298,47 @@ certificado, publicado, comprado, contra-análisis, vendido o reembolsado.
 contrato. La página pública lo verifica contra el contrato y ofrece su registro canónico y su PDF.
 Lo firma la wallet del laboratorio, igual que los análisis.
 
-**Para probarlo:** importe en Freighter las cuentas de prueba (`stellar keys secret minertrace-vendedor-potosi`,
-cualquiera de los otros cinco vendedores, o `minertrace-comprador`), o use cuentas propias fondeadas con friendbot.
-Registre un lote indicando como dueño la dirección del vendedor y siga el flujo: publicar → comprar →
-(contra-análisis) → confirmar o reembolsar.
+**Para probarlo:** importe en Freighter las cuentas de prueba (`stellar keys secret minertrace-vendedor` y
+`minertrace-comprador`), o use cuentas propias fondeadas con friendbot. Registre un lote indicando como dueño
+la dirección del vendedor y siga el flujo: anunciar → ofertar → acordar → reservar → financiar → acreditar
+entrega → confirmar, o abrir incidencia. Un reembolso de metal entregado exige acreditar su devolución.
 
 `npm run test:testnet` incluye una prueba del marketplace con cuentas nuevas fondeadas con friendbot.
 
-## Datos de demostración en testnet
+## Datos de demostración
 
-Con el servidor en marcha (`npm run dev`, con `ANCLAJE=stellar`) y las cuentas del script de despliegue:
+Los laboratorios, informes y lotes de ejemplo son **sintéticos**. La nueva demo comercial se prepara desde
+las pantallas de registro, anuncios y operaciones; no constituye evidencia de origen minero comprobado.
+
+Puede cargar una demo comercial completa mediante el script de desarrollo, exclusivamente en el contrato
+comercial de referencia y en un puerto local separado:
+
+```powershell
+# Primera terminal: API en :3018 y web en :5173.
+$env:PORT="3018"
+npm.cmd run dev:comercio
+# Segunda terminal:
+npm.cmd run demo:comercio -- --url http://localhost:3018
+```
+
+El script verifica contrato, red, token, tarifas y firma con wallet antes de crear datos. Necesita las identidades
+CLI `minertrace-vendedor`, `minertrace-comprador` y el laboratorio configurado. Crea un anuncio abierto y una venta
+cerrada de **2.000 XLM de Testnet**: comprador paga 2.020, vendedor recibe 2.005 y plataforma 15. El ensayo sintético
+de 50 se refleja como gasto externo; el script no paga ese servicio. Volver a ejecutarlo reutiliza los registros
+y comprueba la liquidación, sin borrar datos. No se ejecuta automáticamente al arrancar el portal.
+
+El poblado histórico siguiente fue diseñado para el flujo anterior de laboratorio/mercado. Sus escenarios
+de disputa deben acreditar devolución antes de reembolsar en un contrato v2:
 
 ```bash
 npm run demo:poblar
 ```
 
-Registra 18 lotes de minería boliviana (oro, plata, estaño y otros) usando la API, igual que la web, y firma
-cada paso con la cuenta que correspondería en Freighter (laboratorio, vendedor o comprador). Los lotes quedan
-repartidos entre **6 vendedores** (cooperativas) distintos — Huanuni, Potosí, Tipuani, San Simón, Colquiri y
-Chojlla — para poder elegir entre varios vendedores en `/mercado`. Todo queda en el contrato de testnet:
+Registra 18 lotes sintéticos inspirados en minería boliviana (oro, plata, estaño y otros), repartidos entre seis
+vendedores de demostración. Usa la API, igual que la web, y firma cada paso con la cuenta que correspondería
+en Freighter (laboratorio, vendedor o comprador). Requiere haber preparado esas identidades con el despliegue.
+Todo queda en el
+contrato de testnet:
 
 | Estado tras poblar | Oro | Plata | Estaño | Otros |
 |---|---|---|---|---|
@@ -292,7 +378,7 @@ conéctela en el portal. `FIRMA_LABORATORIO=servidor` conserva el modo anterior 
 
 ## Pendiente
 
-- **Retirar una publicación:** el contrato no tiene `unlist_batch`; un lote publicado sin comprador no se puede retirar.
+- **Retirar una publicación:** comercio v2 dispone de `cancelar_venta` para ventas aún sin financiar.
 - **Firma con passkeys para el técnico de laboratorio (evaluado, no implementado).** El camino vigente es el
   [Smart Account Kit](https://github.com/stellar/smart-account-kit) (SDK oficial sobre las cuentas inteligentes de
   OpenZeppelin, con verificación WebAuthn/secp256r1 en la cadena desde el protocolo 21). Implica:

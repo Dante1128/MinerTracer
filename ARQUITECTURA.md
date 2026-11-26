@@ -41,8 +41,9 @@ por entidad del dominio, cada uno con funciones puntuales que envuelven su SQL:
 - `modelos/lotes.ts`, `modelos/analisis.ts`: lotes y sus análisis versionados.
 - `modelos/contraAnalisis.ts`: contra-análisis del marketplace.
 
-Ninguna consulta SQL de estas tablas vive fuera de `modelos/`: tanto los controladores como los
-servicios de negocio llaman a estas funciones en vez de escribir `ctx.db.query(...)` directamente.
+El módulo base del laboratorio concentra estas consultas en `modelos/`: los controladores y sus
+servicios de negocio llaman a estas funciones. La extensión comercial v2 mantiene sus consultas y
+transacciones de negociación en `comercio/servicio.ts`, con las mismas reglas de integridad.
 (Las tablas de infraestructura — sesiones, recuperaciones, correos pendientes, límites de acceso,
 eventos del contrato — se manejan donde ya vivían, en `auth.ts`, `correo.ts`, `seguridad.ts` y
 `mercado/indexador.ts`, porque son detalle de esos subsistemas y no entidades del dominio.)
@@ -66,6 +67,18 @@ Se reparte en tres capas finas, cada una con una responsabilidad:
 y el marketplace sobre el contrato Soroban): actúan como Modelo+Servicio de su propio dominio
 (leen y escriben su estado) y se consultan desde los controladores igual que cualquier otro
 servicio.
+
+## Extensión comercial v2
+
+`server/src/comercio/` concentra perfiles declarados, anuncios, ofertas, acuerdos inmutables, evidencias,
+sesiones comerciales y cálculos monetarios con enteros. Las rutas `/api/comercio` exponen la negociación;
+`/api/mercado/comercial` prepara y envía las transacciones firmadas por las wallets. El directorio público
+combina los perfiles declarados con sus anuncios y los lotes leídos del contrato, sin exponer contacto ni
+referencias privadas de documentos. La identidad de un vendedor no se certifica por el laboratorio del lote.
+
+El estado de pagos, recepción, incidencias y liquidaciones procede siempre del contrato. Las firmas del
+laboratorio se mantienen en el navegador, y los controladores conservan la comprobación de preparaciones,
+transacciones e importes esperados. Los eventos indexados alimentan la línea de tiempo.
 
 ## Por qué no hay "vistas" en el servidor
 
