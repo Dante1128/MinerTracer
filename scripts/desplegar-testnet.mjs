@@ -146,7 +146,7 @@ if (process.env.TOKEN_CONTRATO) {
     token = stellar(['contract', 'asset', 'deploy', '--asset', activo, '--source-account', CUENTAS.usdc, '--network', RED]);
   } catch (error) {
     // Un despliegue MinerTrace nuevo puede reutilizar el mismo activo sintético.
-    if (!/already.*exist|existing.*contract/i.test(String(error.stderr || error.message))) throw error;
+    if (!/already.*exist|existing.*contract|ExistingValue/i.test(String(error.stderr || error.message))) throw error;
     token = stellar(['contract', 'id', 'asset', '--asset', activo, '--network', RED]);
     stellar(['contract', 'invoke', '--id', token, '--source-account', CUENTAS.admin, '--network', RED, '--send', 'no', '--', 'decimals']);
   }
