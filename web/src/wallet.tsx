@@ -5,6 +5,7 @@ import {
   isConnected,
   requestAccess,
   signTransaction,
+  signMessage,
   WatchWalletChanges,
 } from '@stellar/freighter-api';
 
@@ -21,10 +22,11 @@ interface Wallet {
   redCorrecta: boolean;
   conectando: boolean;
   error: string | null;
-  conectar: () => Promise<void>;
+  conectar: () => Promise<string | null>;
   desconectar: () => void;
   /** Pide la firma a Freighter; lanza ErrorWallet con un mensaje claro si no se firma. */
   firmar: (xdr: string) => Promise<string>;
+  firmarMensaje: (mensaje: string, cuentaEsperada?: string) => Promise<string>;
 }
 
 export class ErrorWallet extends Error {}
@@ -113,8 +115,10 @@ export function ProveedorWallet({ children }: { children: ReactNode }) {
       setDireccion(acceso.address);
       recordar(true);
       await leerRed();
+      return acceso.address;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo conectar la wallet');
+      return null;
     } finally {
       setConectando(false);
     }
@@ -141,9 +145,21 @@ export function ProveedorWallet({ children }: { children: ReactNode }) {
     return resultado.signedTxXdr;
   };
 
+  const firmarMensaje = async (mensaje: string, cuentaEsperada = direccion ?? '') => {
+    if (!cuentaEsperada) throw new ErrorWallet('Conecte su wallet para iniciar sesión.');
+    const redActual = await getNetworkDetails();
+    if (redActual.error || redActual.networkPassphrase !== PASSPHRASE_TESTNET) throw new ErrorWallet('Cambie Freighter a Testnet para continuar.');
+    const resultado = await signMessage(mensaje, { address: cuentaEsperada, networkPassphrase: PASSPHRASE_TESTNET });
+    if (resultado.error) throw new ErrorWallet(mensajeFreighter(resultado.error.message));
+    if (resultado.signerAddress && resultado.signerAddress !== cuentaEsperada) throw new ErrorWallet('La firma pertenece a otra cuenta. Vuelva a conectar su wallet.');
+    if (!resultado.signedMessage) throw new ErrorWallet('Freighter no devolvió la firma. Inténtelo de nuevo.');
+    if (typeof resultado.signedMessage === 'string') return resultado.signedMessage;
+    return btoa(Array.from(resultado.signedMessage, (byte) => String.fromCharCode(byte)).join(''));
+  };
+
   return (
     <ContextoWallet.Provider
-      value={{ instalada, direccion, red, redCorrecta, conectando, error, conectar, desconectar, firmar }}
+      value={{ instalada, direccion, red, redCorrecta, conectando, error, conectar, desconectar, firmar, firmarMensaje }}
     >
       {children}
     </ContextoWallet.Provider>

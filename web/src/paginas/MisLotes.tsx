@@ -173,12 +173,12 @@ function TarjetaLote({
         </form>
       )}
 
-      {esVendedor && estado === 'EnVenta' && <p className="text-sm text-stone-600">Publicado: esperando comprador.</p>}
+      {esVendedor && estado === 'EnVenta' && <p className="text-sm text-stone-600">Publicado: esperando comprador. <Link className="font-medium text-amber-800 underline" to="/operaciones">Ver acuerdos y ofertas →</Link></p>}
       {esVendedor && estado === 'EnGarantia' && (
         <div className="space-y-2">
           <p className="text-sm text-stone-600">
             Comprado por <Cuenta direccion={venta?.comprador} />. El pago está en garantía: lo recibirá cuando el comprador
-            confirme la recepción
+            confirme la recepción y acepte el material
             {vence && <> o, si no confirma ni hay disputa, a partir del {formatoFechaHora(vence)}</>}.
           </p>
           {garantiaVencida(venta) && (
@@ -190,7 +190,7 @@ function TarjetaLote({
       )}
       {esVendedor && estado === 'EnDisputa' && venta && (
         <p className="text-sm text-red-700">
-          Un contra-análisis difiere más que la tolerancia: el comprador puede pedir el reembolso.
+          La operación está en revisión. El pago permanece retenido hasta resolver la incidencia y, cuando corresponda, acreditar la devolución del material.
         </p>
       )}
       {esDueno && estado === 'EnDisputa' && !venta && (
@@ -211,7 +211,7 @@ function TarjetaLote({
             {vence && (
               <>
                 {' '}
-                Tiene {formatoPlazo(plazoSeg)} desde la compra, hasta el <strong>{formatoFechaHora(vence)}</strong>: después, si no hay
+                Tiene {formatoPlazo(plazoSeg)} desde la recepción acreditada, hasta el <strong>{formatoFechaHora(vence)}</strong>: después, si no hay
                 disputa, el vendedor puede cobrar sin su confirmación.
               </>
             )}
@@ -224,12 +224,12 @@ function TarjetaLote({
       {esComprador && estado === 'EnDisputa' && venta && (
         <div className="space-y-2">
           <p className="text-sm text-red-700">
-            El contra-análisis dio {contra ? `${formatoPureza(contra.pureza_bps)}%` : 'otra pureza'}: diferencia mayor que la
-            tolerancia. Puede recuperar su pago.
+            {contra ? `El contra-análisis dio ${formatoPureza(contra.pureza_bps)}%. ` : ''}El pago está retenido durante la revisión. El laboratorio debe acreditar la devolución del material antes del reembolso por pureza.
           </p>
-          <button className="boton bg-red-600 text-white hover:bg-red-700" onClick={() => void ejecutar('refund')} disabled={tx.ocupado}>
-            {tx.ocupado ? 'Procesando…' : `Pedir reembolso (${formatoPrecio(venta.precio, token)})`}
+          <button className="boton bg-red-600 text-white hover:bg-red-700" onClick={() => void ejecutar('refund')} disabled={tx.ocupado || !lote.venta_comercial?.devolucion_hash || !!lote.venta_comercial?.incidencia}>
+            {tx.ocupado ? 'Procesando…' : `Pedir reembolso (${formatoPrecio(lote.venta_comercial?.total ?? venta.precio, token)})`}
           </button>
+          <Link to="/operaciones" className="ml-3 text-sm font-medium text-amber-800 underline">Seguir la incidencia →</Link>
         </div>
       )}
 
