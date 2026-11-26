@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, ErrorApi } from './api.ts';
+import { acortar } from './formato.ts';
 import { ErrorWallet, useWallet } from './wallet.tsx';
 
 export type EstadoLote = 'Certificado' | 'EnVenta' | 'EnGarantia' | 'EnDisputa' | 'Vendido';
@@ -158,6 +159,63 @@ export function useInfoMercado(): InfoMercado | null {
     };
   }, []);
   return info;
+}
+
+/**
+ * Nombres conocidos de las cuentas vendedoras de la demo poblada con `npm run demo:poblar`
+ * (ver server/scripts/poblar-demo.ts). Un vendedor real sin nombre conocido se muestra con su
+ * dirección abreviada: el mercado siempre agrupa por la cuenta dueña del lote en el contrato,
+ * nunca por el laboratorio (que solo certifica el análisis, no vende el lote).
+ */
+const NOMBRE_VENDEDOR_CONOCIDO: Record<string, string> = {
+  GAVLAJBO5WY3HLN3RP625XYV6XPD4KTUB67YUUJINWZUT5I577UYBXI6: 'Cooperativa Minera Huanuni',
+  GA35TV5YYQB3OK337EI4CZO3SSMSY46MCCGSJONGSJQEYQXYX66XC22Z: 'Consorcio de Cooperativas de Potosí',
+  GCZ3ANLXJB7VCGQXXZCFBRTPYWBPVOIB2ZSFAXK6ZVJT4GPUDLVZQWIC: 'Cooperativas Auríferas del Norte de La Paz',
+  GAXG6GXZSXPKTLBFS6TYUV4YWQMACTK5525GJZKZTBW76IXWJ4V7JUXI: 'Cooperativa Aurífera San Simón (Beni)',
+  GB4NXHV3V5OY7EJXJQP5YWLSERN7VOUJJM2ZSOLFVJT4KP3SYRJ5KAKJ: 'Cooperativa Minera Colquiri',
+  GCLOFJ2GSUVKBR6EHSKBG4OSTOWF72JFZ5DQ4BFB2NJXL4X3CYDGQ5LD: 'Minera Chojlla',
+};
+
+/** Un vendedor (la cuenta dueña del lote) con sus lotes en venta: la "tienda" dentro del mercado. */
+export interface Vendedor {
+  id: string;
+  nombre: string;
+  lotes: EstadoComercial[];
+  minerales: string[];
+  laboratorios: string[];
+}
+
+/** Agrupa los lotes en venta por la cuenta vendedora (el dueño del lote en el contrato). */
+export function agruparPorVendedor(lotes: EstadoComercial[]): Vendedor[] {
+  const porId = new Map<string, Vendedor>();
+  for (const lote of lotes) {
+    const id = lote.venta?.vendedor ?? lote.dueno;
+    const nombre = NOMBRE_VENDEDOR_CONOCIDO[id] ?? acortar(id, 6);
+    const vendedor = porId.get(id) ?? { id, nombre, lotes: [], minerales: [], laboratorios: [] };
+    vendedor.lotes.push(lote);
+    if (lote.tipo_mineral && !vendedor.minerales.includes(lote.tipo_mineral)) vendedor.minerales.push(lote.tipo_mineral);
+    const lab = lote.laboratorio?.nombre;
+    if (lab && !vendedor.laboratorios.includes(lab)) vendedor.laboratorios.push(lab);
+    porId.set(id, vendedor);
+  }
+  return [...porId.values()].sort((a, b) => b.lotes.length - a.lotes.length);
+}
+
+/** Lee los lotes en venta del contrato (se puede forzar una relectura cambiando `recarga`). */
+export function useLotesMercado(habilitado: boolean | undefined, recarga = 0) {
+  const [lotes, setLotes] = useState<EstadoComercial[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!habilitado) return;
+    let vigente = true;
+    setError(null);
+    setLotes(null);
+    api<EstadoComercial[]>('/mercado/lotes')
+      .then((datos) => { if (vigente) setLotes(datos); })
+      .catch((e) => { if (vigente) setError(e instanceof ErrorApi ? e.message : 'No se pudo leer el contrato'); });
+    return () => { vigente = false; };
+  }, [habilitado, recarga]);
+  return { lotes, error };
 }
 
 export type PasoTransaccion = 'inactivo' | 'preparando' | 'firmando' | 'enviando' | 'confirmada' | 'error';

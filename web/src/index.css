@@ -3,12 +3,30 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+
+  /* Paleta de marca: Gris Carbón (60%, principal), Ámbar Mineral (10%, acento), Gris Piedra Claro (30%, fondo). */
   --color-mineral-50: #fffbeb;
   --color-mineral-100: #fef3c7;
   --color-mineral-400: #fbbf24;
   --color-mineral-500: #f59e0b;
   --color-mineral-600: #d97706;
   --color-mineral-700: #b45309;
+
+  /* Escala neutra ("stone") reemplazada por la rampa Gris Piedra Claro → Gris Carbón. */
+  --color-stone-50: #f4f5f7;
+  --color-stone-100: #e8eaed;
+  --color-stone-200: #d3d7dc;
+  --color-stone-300: #b4bac2;
+  --color-stone-400: #8b939e;
+  --color-stone-500: #697180;
+  --color-stone-600: #4f5663;
+  --color-stone-700: #3a3f4a;
+  --color-stone-800: #272b33;
+  --color-stone-900: #1e242b;
+  --color-stone-950: #15181d;
+
+  --shadow-dura: 4px 4px 0 0 var(--color-stone-900);
+  --shadow-dura-sm: 3px 3px 0 0 var(--color-stone-900);
 }
 
 @layer base {
@@ -21,24 +39,26 @@
 }
 
 @utility campo {
-  @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm shadow-sm transition
-    placeholder:text-stone-400 focus:border-mineral-500 focus:ring-2 focus:ring-mineral-500/20 focus:outline-none;
+  @apply w-full rounded-lg border-2 border-stone-300 bg-white px-3 py-2 text-sm transition
+    placeholder:text-stone-400 focus:border-mineral-600 focus:ring-2 focus:ring-mineral-500/20 focus:outline-none;
 }
 @utility etiqueta {
   @apply mb-1 block text-sm font-medium text-stone-700;
 }
 @utility boton {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition
     disabled:cursor-not-allowed disabled:opacity-50;
 }
 @utility boton-primario {
-  @apply boton bg-stone-900 text-white hover:bg-stone-700;
+  @apply boton border-2 border-stone-900 bg-mineral-600 text-stone-900 shadow-[var(--shadow-dura-sm)]
+    hover:translate-x-[1px] hover:translate-y-[1px] hover:bg-mineral-500 hover:shadow-none;
 }
 @utility boton-secundario {
-  @apply boton border border-stone-300 bg-white text-stone-800 hover:bg-stone-100;
+  @apply boton border-2 border-stone-900 bg-white text-stone-900 shadow-[var(--shadow-dura-sm)]
+    hover:translate-x-[1px] hover:translate-y-[1px] hover:bg-stone-50 hover:shadow-none;
 }
 @utility tarjeta {
-  @apply rounded-2xl border border-stone-200 bg-white shadow-sm;
+  @apply rounded-2xl border-2 border-stone-900 bg-white shadow-[var(--shadow-dura)];
 }
 @utility hash {
   @apply font-mono text-xs break-all text-stone-600;

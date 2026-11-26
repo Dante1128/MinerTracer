@@ -13,6 +13,9 @@ import {
   type RegistroContraAnalisis,
 } from '../integridad/canonico.ts';
 import type { EstadoComercial, Mercado } from '../mercado/mercado.ts';
+import * as modeloContraAnalisis from '../modelos/contraAnalisis.ts';
+import * as modeloLaboratorios from '../modelos/laboratorios.ts';
+import * as modeloLotes from '../modelos/lotes.ts';
 import { CODIGO_LOTE, validarAnalisis, type AnalisisValidado } from '../validacion.ts';
 import { prepararPdf, type PdfSubido } from './registro.ts';
 
@@ -53,8 +56,7 @@ async function prepararRegistro(
 ): Promise<Preparado> {
   const mercado = requiereMercado(ctx);
   if (!pdf) throw new ErrorHttp(400, 'Adjunte el informe PDF del contra-análisis');
-  const [lote] = await ctx.db.query('SELECT id FROM lotes WHERE id = $1', [loteId]);
-  if (!lote) throw new ErrorHttp(404, `Lote ${loteId} no encontrado`);
+  if (!await modeloLotes.existe(ctx.db, loteId)) throw new ErrorHttp(404, `Lote ${loteId} no encontrado`);
   const lab = await laboratorioDe(ctx, usuario);
   comprobarEstado(await mercado.estadoLote(loteId), lab.cuenta_publica);
 
@@ -71,11 +73,7 @@ async function prepararRegistro(
 }
 
 async function laboratorioDe(ctx: Contexto, usuario: Usuario) {
-  const [lab] = await ctx.db.query<{ id: string; cuenta_publica: string }>(
-    'SELECT id, cuenta_publica FROM laboratorios WHERE id = $1',
-    [usuario.laboratorio_id],
-  );
-  return lab;
+  return modeloLaboratorios.buscarCuentaPublica(ctx.db, usuario.laboratorio_id);
 }
 
 const argumentosContrato = (p: Preparado) => ({
@@ -88,16 +86,23 @@ const argumentosContrato = (p: Preparado) => ({
 /** Se guarda solo después de que el contrato aceptó el contra-análisis. */
 async function guardar(ctx: Contexto, usuario: Usuario, p: Preparado, txId: string, fecha: string) {
   const r = p.registro;
-  const [fila] = await ctx.db.query(
-    `INSERT INTO contra_analisis (lote_id, laboratorio_id, analista_id, fecha_analisis, metodo, pureza, composicion,
-       observaciones, pdf_sha256, salt, version_esquema, hash, pdf_nombre, tx_id, fecha_anclaje)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
-    [
-      r.lote_id, r.laboratorio_id, usuario.id, r.fecha_analisis, r.metodo, r.pureza,
-      JSON.stringify(r.composicion), r.observaciones, r.pdf_sha256, r.salt,
-      r.version_esquema, p.hash, p.pdfNombre, txId, fecha,
-    ],
-  );
+  const fila = await modeloContraAnalisis.crear(ctx.db, {
+    lote_id: r.lote_id,
+    laboratorio_id: r.laboratorio_id,
+    analista_id: usuario.id,
+    fecha_analisis: r.fecha_analisis,
+    metodo: r.metodo,
+    pureza: r.pureza,
+    composicion: r.composicion,
+    observaciones: r.observaciones,
+    pdf_sha256: r.pdf_sha256,
+    salt: r.salt,
+    version_esquema: r.version_esquema,
+    hash: p.hash,
+    pdf_nombre: p.pdfNombre,
+    tx_id: txId,
+    fecha_anclaje: fecha,
+  });
   void requiereMercado(ctx).indexador.sincronizar().catch(() => {});
   return fila;
 }
@@ -238,9 +243,7 @@ export async function verificarContraAnalisis(fila: any, estado: EstadoComercial
 /** Lotes en garantía, sin contra-análisis, certificados por otro laboratorio. */
 export async function lotesParaContraAnalisis(ctx: Contexto, usuario: Usuario) {
   const mercado = requiereMercado(ctx);
-  const [lab] = await ctx.db.query<{ cuenta_publica: string }>('SELECT cuenta_publica FROM laboratorios WHERE id = $1', [
-    usuario.laboratorio_id,
-  ]);
+  const lab = await modeloLaboratorios.buscarCuentaPublica(ctx.db, usuario.laboratorio_id);
   const lotes = await mercado.lotesFiltrados(
     (e) => e.estado === 'EnGarantia' && !e.contra_analisis && e.venta?.lab !== lab.cuenta_publica,
   );

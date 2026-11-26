@@ -12,7 +12,8 @@ pinned: false
 
 Trazabilidad e integridad de análisis minerales. El diseño completo está en [MinerTrace.md](MinerTrace.md).
 Para usar y presentar la aplicación (vistas, credenciales, wallet, transacciones y guiones de demo), vea [GUIA.md](GUIA.md);
-para la explicación técnica de la capa blockchain (Stellar, contrato Soroban, hashing, firmas), vea [TECNICO.md](TECNICO.md).
+para la explicación técnica de la capa blockchain (Stellar, contrato Soroban, hashing, firmas), vea [TECNICO.md](TECNICO.md);
+para cómo se reparte el código en Modelo-Vista-Controlador, vea [ARQUITECTURA.md](ARQUITECTURA.md).
 
 Esta fase incluye la aplicación web completa y el backend, con el hashing real (RFC 8785 + SHA-256).
 El **anclaje en Stellar está simulado** (`AnclajeMock`); ver la sección 17 del documento para la Fase 2.
@@ -75,16 +76,18 @@ Solo está disponible con `DEMO_ALTERAR=true` y nunca con `NODE_ENV=production`.
 
 ```
 server/src/
+  modelos/                   Modelo: acceso a las tablas (lotes, analisis, contra_analisis, usuarios, laboratorios)
+  db/esquema.ts              Modelo: tablas + triggers de solo inserción
+  controladores/             Controlador: HTTP de cada handler (recibe la petición, llama servicios/modelos, responde)
+  rutas/                     Controlador: mapeo URL → controlador (middlewares, Multer, Router)
+  servicios/registro.ts      Controlador (negocio): alta de lotes, análisis y correcciones (versiones)
+  servicios/verificacion.ts  Controlador (negocio): recalcula hash, consulta el anclaje, valida la firma y el PDF
   integridad/canonico.ts     registro canónico, JCS (RFC 8785), SHA-256, salt
   anclaje/ServicioAnclaje.ts interfaz fija del servicio de anclaje
   anclaje/AnclajeMock.ts     anclaje simulado (ANCLAJE=mock)
   anclaje/AnclajeStellar.ts  anclaje en el contrato Soroban de testnet (ANCLAJE=stellar)
   anclaje/procesador.ts      anclaje asíncrono con reintentos y espera exponencial
-  servicios/registro.ts      alta de lotes, análisis y correcciones (versiones)
-  servicios/verificacion.ts  recalcula hash, consulta el anclaje, valida la firma y el PDF
-  db/esquema.ts              tablas + triggers de solo inserción
-  rutas/                     API del laboratorio, pública y de demostración
-web/src/
+web/src/                     Vista: SPA en React que consume la API JSON (ver ARQUITECTURA.md)
   paginas/                   Inicio, Verificar, ResultadoLote, Login, Panel, NuevoAnalisis, DetalleAnalisis
   componentes/               formulario de análisis, escáner QR, verificación, insignias
 server/src/mercado/          marketplace: estado comercial desde el contrato, transacciones para la wallet, indexador de eventos
@@ -154,9 +157,11 @@ npm run contrato:desplegar   # cuentas de prueba + despliegue + laboratorios aut
 
 El script:
 
-1. Crea con friendbot, o reutiliza, cinco identidades del CLI: `minertrace-admin`, `minertrace-lab-a`,
-   `minertrace-lab-b`, `minertrace-vendedor` y `minertrace-comprador`. Sus claves quedan en la configuración
-   global del CLI (`~/.config/stellar`), no en el repositorio. Para ver una: `stellar keys secret <nombre>`.
+1. Crea con friendbot, o reutiliza, diez identidades del CLI: `minertrace-admin`, `minertrace-lab-a`,
+   `minertrace-lab-b`, seis vendedores (`minertrace-vendedor-huanuni`, `-potosi`, `-tipuani`, `-sansimon`,
+   `-colquiri`, `-chojlla`: cada cooperativa es un vendedor distinto, para poder elegir entre varios en el
+   mercado) y `minertrace-comprador`. Sus claves quedan en la configuración global del CLI (`~/.config/stellar`),
+   no en el repositorio. Para ver una: `stellar keys secret <nombre>`.
 2. Compila el contrato y lo despliega. El constructor recibe el admin, el token y la tolerancia.
 3. Autoriza los dos laboratorios e imprime el `CONTRACT_ID`.
 
@@ -184,7 +189,7 @@ El enlace de cada transacción lleva a stellar.expert (testnet).
    STELLAR_CONTRATO_ID=C...                 # el que imprimió el script
    STELLAR_SECRETO_LAB_001=S...             # stellar keys secret minertrace-lab-a
    STELLAR_SECRETO_LAB_002=S...             # stellar keys secret minertrace-lab-b
-   STELLAR_DUENO_DEMO=G...                  # opcional: stellar keys public-key minertrace-vendedor
+   STELLAR_DUENO_DEMO=G...                  # opcional: stellar keys public-key minertrace-vendedor-potosi
    ```
 3. Use una base de datos nueva (otro `DATOS_DIR` o borre `server/datos/`): las cuentas de los laboratorios
    sembrados en modo mock no son las de testnet.
@@ -209,7 +214,8 @@ Vendedores y compradores no tienen usuario ni contraseña: se identifican con su
 
 | Ruta | Para | Qué hace |
 |---|---|---|
-| `/mercado` | todos | Lotes en venta leídos del contrato: pureza certificada, laboratorio, precio, estado |
+| `/mercado` | todos | Directorio de vendedores (laboratorio certificador) + todos los lotes en venta: pureza certificada, precio, estado |
+| `/mercado/vendedor/:id` | todos | Lotes en venta de un solo vendedor: "elegir un vendedor" estilo marketplace |
 | `/mercado/:loteId` | comprador | Verificación completa del análisis + estado comercial + **Comprar** (firma `buy`) |
 | `/mis-lotes` | dueño / comprador | Publicar con precio (`list_batch`), confirmar la recepción (`confirm`) o pedir el reembolso en disputa (`refund`) |
 | `/laboratorio/contra-analisis` | segundo laboratorio | Contra-análisis de un lote en garantía (`counter_analysis`) |
@@ -228,9 +234,10 @@ certificado, publicado, comprado, contra-análisis, vendido o reembolsado.
 contrato. La página pública lo verifica contra el contrato y ofrece su registro canónico y su PDF.
 Lo firma la wallet del laboratorio, igual que los análisis.
 
-**Para probarlo:** importe en Freighter las cuentas de prueba (`stellar keys secret minertrace-vendedor` y
-`minertrace-comprador`), o use cuentas propias fondeadas con friendbot. Registre un lote indicando como dueño
-la dirección del vendedor y siga el flujo: publicar → comprar → (contra-análisis) → confirmar o reembolsar.
+**Para probarlo:** importe en Freighter las cuentas de prueba (`stellar keys secret minertrace-vendedor-potosi`,
+cualquiera de los otros cinco vendedores, o `minertrace-comprador`), o use cuentas propias fondeadas con friendbot.
+Registre un lote indicando como dueño la dirección del vendedor y siga el flujo: publicar → comprar →
+(contra-análisis) → confirmar o reembolsar.
 
 `npm run test:testnet` incluye una prueba del marketplace con cuentas nuevas fondeadas con friendbot.
 
@@ -243,8 +250,9 @@ npm run demo:poblar
 ```
 
 Registra 18 lotes de minería boliviana (oro, plata, estaño y otros) usando la API, igual que la web, y firma
-cada paso con la cuenta que correspondería en Freighter (laboratorio, vendedor o comprador). Todo queda en el
-contrato de testnet:
+cada paso con la cuenta que correspondería en Freighter (laboratorio, vendedor o comprador). Los lotes quedan
+repartidos entre **6 vendedores** (cooperativas) distintos — Huanuni, Potosí, Tipuani, San Simón, Colquiri y
+Chojlla — para poder elegir entre varios vendedores en `/mercado`. Todo queda en el contrato de testnet:
 
 | Estado tras poblar | Oro | Plata | Estaño | Otros |
 |---|---|---|---|---|

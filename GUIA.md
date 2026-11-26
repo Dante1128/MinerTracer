@@ -224,18 +224,26 @@ Contraseña de todos: **`minertrace123`**
 
 | Cuenta | Para qué | Dirección pública |
 |---|---|---|
-| `minertrace-lab-a` | Firma los análisis de **LAB-001** | `GCPCQ6JVHRMUZ7QPVDCK2AW3DRKU3WOXIPIUO72PKS2BA6W2M4UZHQWF` |
-| `minertrace-lab-b` | Firma los análisis y contra-análisis de **LAB-002** | `GA4T7QXPQEMLTMR2GRSK327HKIY5QKAIXSQQBW4HH5J762Y422YO4VMU` |
-| `minertrace-vendedor` | **Dueño/vendedor** de todos los lotes de la demo | `GBJZFZ52JRTIPAHXCXQPQ4OJKMVKOIGJDGOOYDPRQYEUZKBO3FQJPSSL` |
-| `minertrace-comprador` | **Comprador** (~18 500 XLM de prueba) | `GDRILNQTFSNQA3HXC2BWSGVCPIJ3URVOXHKKRNM6P6IK7EJPRQYXTD5R` |
-| `minertrace-admin` | Administrador del contrato (autoriza laboratorios; solo por consola) | `GD5C42D6F23JAKEULOZMDSDBHPPPFSCVVNODMTGMGCJDYD7UE64ZBVOM` |
+| `minertrace-lab-a` | Firma los análisis de **LAB-001** | (la imprime `npm run contrato:desplegar`) |
+| `minertrace-lab-b` | Firma los análisis y contra-análisis de **LAB-002** | (la imprime `npm run contrato:desplegar`) |
+| `minertrace-vendedor-huanuni` | **Vendedor**: Cooperativa Minera Huanuni | (ídem) |
+| `minertrace-vendedor-potosi` | **Vendedor**: Consorcio de Cooperativas de Potosí | (ídem) |
+| `minertrace-vendedor-tipuani` | **Vendedor**: Cooperativas Auríferas del Norte de La Paz | (ídem) |
+| `minertrace-vendedor-sansimon` | **Vendedor**: Cooperativa Aurífera San Simón (Beni) | (ídem) |
+| `minertrace-vendedor-colquiri` | **Vendedor**: Cooperativa Minera Colquiri | (ídem) |
+| `minertrace-vendedor-chojlla` | **Vendedor**: Minera Chojlla | (ídem) |
+| `minertrace-comprador` | **Comprador** (~18 500 XLM de prueba) | (ídem) |
+| `minertrace-admin` | Administrador del contrato (autoriza laboratorios; solo por consola) | (ídem) |
+
+Las direcciones cambian en cada despliegue nuevo: use las que imprime `npm run contrato:desplegar`, no las fije
+de memoria. Hay 6 vendedores (uno por cooperativa) para poder elegir entre varios en `/mercado`, en vez de uno solo.
 
 Las **claves secretas** están solo en tu computadora (Stellar CLI). Para verlas e importarlas en Freighter:
 
 ```bash
 stellar keys secret minertrace-lab-a
 stellar keys secret minertrace-lab-b
-stellar keys secret minertrace-vendedor
+stellar keys secret minertrace-vendedor-potosi   # o -huanuni, -tipuani, -sansimon, -colquiri, -chojlla
 stellar keys secret minertrace-comprador
 ```
 
@@ -253,8 +261,9 @@ la cuenta `lab-a`; la app avisa si conectas otra.
    y crea una wallet con una contraseña local (o desbloquea la existente).
 2. **Cambia la red a Testnet**: en Freighter, abre el selector de red (arriba) y elige **Testnet**.
 3. **Importa las cuentas de la demo**: en el menú de cuentas, elige la opción de **importar una clave secreta**
-   y pega la clave que da `stellar keys secret minertrace-comprador`. Repite con `vendedor`, `lab-a` y `lab-b`.
-   Ponles nombre (Comprador, Vendedor, Lab A, Lab B) para cambiar entre ellas con facilidad.
+   y pega la clave que da `stellar keys secret minertrace-comprador`. Repite con `lab-a`, `lab-b` y al menos un
+   vendedor (por ejemplo `minertrace-vendedor-potosi`; importe los otros cinco si quiere mostrar varios vendedores).
+   Ponles nombre (Comprador, Lab A, Lab B, Vendedor Potosí…) para cambiar entre ellas con facilidad.
 4. En la app, pulsa **Conectar wallet** (arriba a la derecha) y acepta en Freighter.
 5. ✅ El botón muestra tu dirección abreviada. Si aparece **"Red incorrecta"** en rojo, Freighter no está en Testnet.
 6. Para actuar como otro rol, **cambia de cuenta en Freighter**: la app lo detecta sola en unos segundos.

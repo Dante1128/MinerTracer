@@ -1,0 +1,46 @@
+import type { Request, Response } from 'express';
+import { sobrescribirPdf } from '../almacenamiento.ts';
+import { usuarioDe } from '../auth.ts';
+import { ErrorHttp, type Contexto } from '../contexto.ts';
+import { construirRegistro, hashRegistro } from '../integridad/canonico.ts';
+import * as analisis from '../modelos/analisis.ts';
+import * as lotes from '../modelos/lotes.ts';
+import { pdfSimple } from '../pdfSimple.ts';
+import { validarPureza } from '../validacion.ts';
+
+/**
+ * Controlador SOLO DEMOSTRACIÓN (DEMO_ALTERAR=true, nunca en producción), ver ../rutas/demo.ts.
+ *
+ * Simula al intermediario de la sección 13 de MinerTrace.md: alguien con acceso
+ * directo a la base de datos que desactiva la protección de solo inserción,
+ * cambia la pureza, recalcula el hash guardado en la fila para cubrir sus
+ * huellas y sustituye el PDF. Aun así el verificador lo detecta, porque el
+ * hash anclado no se puede cambiar.
+ */
+export async function alterar(ctx: Contexto, req: Request, res: Response) {
+  const usuario = usuarioDe(req);
+  const analisisId = String(req.body?.analisis_id ?? '');
+  const pureza = validarPureza(req.body?.pureza);
+
+  const fila = await analisis.buscarUltimaVersionDeLaboratorio(ctx.db, analisisId, usuario.laboratorio_id);
+  if (!fila) throw new ErrorHttp(404, 'Análisis no encontrado');
+  const lote = await lotes.buscarPorId(ctx.db, fila.lote_id);
+
+  const hashFalso = hashRegistro(construirRegistro({ ...fila, pureza }, lote));
+  await ctx.db.exec('ALTER TABLE analisis DISABLE TRIGGER mt_analisis_protegido');
+  try {
+    await ctx.db.query('UPDATE analisis SET pureza = $2, hash = $3 WHERE id = $1', [fila.id, pureza, hashFalso]);
+  } finally {
+    await ctx.db.exec('ALTER TABLE analisis ENABLE TRIGGER mt_analisis_protegido');
+  }
+
+  if (req.body?.falsificar_pdf) {
+    await sobrescribirPdf(
+      fila.pdf_sha256,
+      pdfSimple(`Informe de analisis ${fila.analisis_id}`, [`Lote: ${fila.lote_id}`, `Pureza: ${pureza} %`]),
+    );
+  }
+
+  console.warn(`[demo] ${usuario.email} alteró ${analisisId} v${fila.version}: pureza ${fila.pureza} -> ${pureza}`);
+  res.json({ analisis_id: analisisId, version: fila.version, pureza_original: fila.pureza, pureza_nueva: pureza });
+}

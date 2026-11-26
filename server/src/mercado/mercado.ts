@@ -2,6 +2,8 @@ import { StrKey } from '@stellar/stellar-sdk';
 import { ErrorContrato } from '../anclaje/erroresContrato.ts';
 import { ErrorHttp } from '../contexto.ts';
 import type { Db } from '../db/index.ts';
+import * as laboratorios from '../modelos/laboratorios.ts';
+import * as lotes from '../modelos/lotes.ts';
 import { ContratoSoroban, FondosInsuficientes, PASSPHRASE } from '../stellar/contrato.ts';
 import { aJson, IndexadorEventos } from './indexador.ts';
 
@@ -142,10 +144,10 @@ export class Mercado {
    * los lotes registrados en MinerTrace y se lee el estado de cada uno.
    */
   async lotesFiltrados(filtro: (estado: EstadoComercial) => boolean) {
-    const lotes = await this.db.query<{ id: string }>('SELECT id FROM lotes ORDER BY creado_en DESC');
+    const ids = await lotes.listarIds(this.db);
     const estados: EstadoComercial[] = [];
-    for (let i = 0; i < lotes.length; i += 10) {
-      const tanda = await Promise.all(lotes.slice(i, i + 10).map((l) => this.estadoLote(l.id)));
+    for (let i = 0; i < ids.length; i += 10) {
+      const tanda = await Promise.all(ids.slice(i, i + 10).map((l) => this.estadoLote(l.id)));
       for (const e of tanda) if (e && filtro(e)) estados.push(e);
     }
     return this.conDatosDelLote(estados);
@@ -216,7 +218,8 @@ export class Mercado {
       const config = await this.contrato.leer<{ token: string }>('get_config');
       const token = new ContratoSoroban(this.contrato.rpcUrl, config.token);
       const [simbolo, decimales] = await Promise.all([token.leer<string>('symbol'), token.leer<number>('decimals')]);
-      return { contrato: config.token, simbolo: simbolo === 'native' ? 'XLM' : simbolo, decimales: Number(decimales) };
+      // Un activo clásico (no nativo) devuelve "CODIGO:EMISOR"; solo interesa el código.
+      return { contrato: config.token, simbolo: simbolo === 'native' ? 'XLM' : simbolo.split(':')[0], decimales: Number(decimales) };
     })().catch((error) => {
       this.token = null;
       throw error;
@@ -239,15 +242,10 @@ export class Mercado {
   private async conDatosDelLote(estados: EstadoComercial[]) {
     if (estados.length === 0) return [];
     const ids = estados.map((e) => e.lote_id);
-    const lotes = await this.db.query<{ id: string; tipo_mineral: string; origen: string; peso_kg: string }>(
-      'SELECT id, tipo_mineral, origen, peso_kg FROM lotes WHERE id = ANY($1)',
-      [ids],
-    );
-    const labs = await this.db.query<{ id: string; nombre: string; cuenta_publica: string }>(
-      'SELECT id, nombre, cuenta_publica FROM laboratorios',
-    );
+    const lotesEncontrados = await lotes.listarPorIds(this.db, ids);
+    const labs = await laboratorios.listarTodos(this.db);
     return estados.map((e) => {
-      const lote = lotes.find((l) => l.id === e.lote_id);
+      const lote = lotesEncontrados.find((l) => l.id === e.lote_id);
       const lab = labs.find((l) => l.cuenta_publica === e.lab);
       return {
         ...e,

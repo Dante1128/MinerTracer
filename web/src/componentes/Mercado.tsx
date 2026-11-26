@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { formatoFechaHora, acortar } from '../formato.ts';
+import { formatoFechaHora, formatoPeso, acortar } from '../formato.ts';
 import {
   ETIQUETA_ESTADO,
   formatoPrecio,
@@ -10,6 +10,7 @@ import {
   type InfoToken,
   type PasoTransaccion,
   type ResultadoTransaccion,
+  type Vendedor,
   venceGarantia,
 } from '../mercado.ts';
 import { useWallet } from '../wallet.tsx';
@@ -272,5 +273,54 @@ export function Cronologia({ eventos, token }: { eventos: EventoCronologia[]; to
         );
       })}
     </ol>
+  );
+}
+
+/** Tarjeta de un lote en venta: pureza, precio, procedencia y quién lo certificó. */
+export function TarjetaLote({ lote, token }: { lote: EstadoComercial; token: InfoToken }) {
+  return (
+    <Link to={`/mercado/${lote.lote_id}`} className="tarjeta block p-5 transition hover:-translate-y-0.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono font-semibold">{lote.lote_id}</span>
+        <PillEstadoLote estado={lote.estado} />
+      </div>
+      <p className="mt-1 text-sm text-stone-600">
+        {lote.tipo_mineral ?? 'Lote'}
+        {lote.peso_kg && ` · ${formatoPeso(lote.peso_kg)}`}
+      </p>
+      {lote.origen && <p className="text-sm text-stone-500">{lote.origen}</p>}
+      <div className="mt-4 flex items-end justify-between">
+        <div>
+          <p className="text-xs text-stone-500">Pureza certificada</p>
+          <p className="font-mono text-2xl font-bold">{formatoPureza(lote.venta?.pureza_bps ?? lote.pureza_bps)}%</p>
+        </div>
+        {lote.venta && <p className="text-lg font-semibold">{formatoPrecio(lote.venta.precio, token)}</p>}
+      </div>
+      <p className="mt-2 text-xs text-stone-500">{lote.laboratorio?.nombre ?? 'Laboratorio autorizado en el contrato'}</p>
+    </Link>
+  );
+}
+
+/** Tarjeta de un vendedor (la cuenta que publica y cobra el lote) en el directorio del mercado. */
+export function TarjetaVendedor({ vendedor }: { vendedor: Vendedor }) {
+  return (
+    <Link to={`/mercado/vendedor/${vendedor.id}`} className="tarjeta block p-5 transition hover:-translate-y-0.5">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="font-bold">{vendedor.nombre}</p>
+          <p className="font-mono text-xs text-stone-500" title={vendedor.id}>{acortar(vendedor.id, 6)}</p>
+        </div>
+        <span className="inline-flex shrink-0 items-center rounded-full bg-mineral-50 px-2.5 py-0.5 text-xs font-semibold text-mineral-700 ring-1 ring-mineral-600/20">
+          {vendedor.lotes.length} {vendedor.lotes.length === 1 ? 'lote' : 'lotes'}
+        </span>
+      </div>
+      {vendedor.minerales.length > 0 && (
+        <p className="mt-3 text-sm text-stone-600">{vendedor.minerales.join(' · ')}</p>
+      )}
+      {vendedor.laboratorios.length > 0 && (
+        <p className="mt-1 text-xs text-stone-500">Certificado por {vendedor.laboratorios.join(' · ')}</p>
+      )}
+      <p className="mt-4 text-sm font-semibold text-mineral-700">Ver lotes en venta →</p>
+    </Link>
   );
 }

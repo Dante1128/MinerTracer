@@ -23,6 +23,18 @@ const EXPLORADOR = 'https://stellar.expert/explorer/testnet/tx/';
 
 type Destino = 'en_venta' | 'vendido' | 'en_garantia' | 'disputa' | 'corregido' | 'sin_firmar';
 
+/** Cooperativas/operaciones mineras que venden sus lotes: varios vendedores entre los que elegir en el mercado. */
+type VendedorId = 'huanuni' | 'potosi' | 'tipuani' | 'sansimon' | 'colquiri' | 'chojlla';
+
+const NOMBRE_VENDEDOR: Record<VendedorId, string> = {
+  huanuni: 'Cooperativa Minera Huanuni',
+  potosi: 'Consorcio de Cooperativas de Potosí',
+  tipuani: 'Cooperativas Auríferas del Norte de La Paz',
+  sansimon: 'Cooperativa Aurífera San Simón (Beni)',
+  colquiri: 'Cooperativa Minera Colquiri',
+  chojlla: 'Minera Chojlla',
+};
+
 interface DatosAnalisis {
   fecha: string;
   metodo: string;
@@ -33,6 +45,7 @@ interface DatosAnalisis {
 
 interface LoteDemo {
   codigo: string;
+  vendedor: VendedorId;
   lab: 'A' | 'B';
   tipo: string;
   peso: string;
@@ -49,6 +62,7 @@ interface LoteDemo {
 const LOTES: LoteDemo[] = [
   {
     codigo: 'LT-2026-0501',
+    vendedor: 'huanuni',
     lab: 'A',
     tipo: 'Concentrado de estaño',
     peso: '18250.000',
@@ -66,6 +80,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0502',
+    vendedor: 'potosi',
     lab: 'A',
     tipo: 'Concentrado de plata',
     peso: '4200.000',
@@ -84,6 +99,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0503',
+    vendedor: 'potosi',
     lab: 'A',
     tipo: 'Concentrado de zinc',
     peso: '25600.000',
@@ -101,6 +117,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0504',
+    vendedor: 'potosi',
     lab: 'A',
     tipo: 'Concentrado de plomo',
     peso: '9800.000',
@@ -119,6 +136,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0505',
+    vendedor: 'colquiri',
     lab: 'A',
     tipo: 'Concentrado de estaño',
     peso: '15100.000',
@@ -140,6 +158,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0506',
+    vendedor: 'chojlla',
     lab: 'B',
     tipo: 'Concentrado de wolframio',
     peso: '3300.000',
@@ -157,6 +176,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0507',
+    vendedor: 'potosi',
     lab: 'A',
     tipo: 'Concentrado de antimonio',
     peso: '6100.000',
@@ -175,6 +195,7 @@ const LOTES: LoteDemo[] = [
   // ---- Oro ----
   {
     codigo: 'LT-2026-0508',
+    vendedor: 'tipuani',
     lab: 'A',
     tipo: 'Doré de oro',
     peso: '12.450',
@@ -192,6 +213,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0509',
+    vendedor: 'tipuani',
     lab: 'A',
     tipo: 'Doré de oro',
     peso: '8.920',
@@ -210,6 +232,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0510',
+    vendedor: 'tipuani',
     lab: 'A',
     tipo: 'Doré de oro',
     peso: '15.300',
@@ -227,6 +250,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0511',
+    vendedor: 'sansimon',
     lab: 'A',
     tipo: 'Doré de oro',
     peso: '6.780',
@@ -245,6 +269,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0518',
+    vendedor: 'tipuani',
     lab: 'A',
     tipo: 'Doré de oro',
     peso: '10.050',
@@ -263,6 +288,7 @@ const LOTES: LoteDemo[] = [
   // ---- Plata ----
   {
     codigo: 'LT-2026-0512',
+    vendedor: 'potosi',
     lab: 'A',
     tipo: 'Concentrado de plata',
     peso: '6800.000',
@@ -280,6 +306,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0513',
+    vendedor: 'potosi',
     lab: 'A',
     tipo: 'Doré de plata',
     peso: '320.000',
@@ -298,6 +325,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0514',
+    vendedor: 'potosi',
     lab: 'A',
     tipo: 'Concentrado de plata',
     peso: '5150.000',
@@ -321,6 +349,7 @@ const LOTES: LoteDemo[] = [
   // ---- Estaño ----
   {
     codigo: 'LT-2026-0515',
+    vendedor: 'potosi',
     lab: 'A',
     tipo: 'Concentrado de estaño',
     peso: '21300.000',
@@ -338,6 +367,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0516',
+    vendedor: 'colquiri',
     lab: 'A',
     tipo: 'Concentrado de estaño',
     peso: '11750.000',
@@ -355,6 +385,7 @@ const LOTES: LoteDemo[] = [
   },
   {
     codigo: 'LT-2026-0517',
+    vendedor: 'huanuni',
     lab: 'B',
     tipo: 'Concentrado de estaño',
     peso: '19400.000',
@@ -472,8 +503,16 @@ console.log(`Poblando la demo en el contrato ${info.contrato_id} (firma del labo
 const cuentas = {
   A: claveDe('DEMO_SECRETO_LAB_A', 'minertrace-lab-a'),
   B: claveDe('DEMO_SECRETO_LAB_B', 'minertrace-lab-b'),
-  vendedor: claveDe('DEMO_SECRETO_VENDEDOR', 'minertrace-vendedor'),
   comprador: claveDe('DEMO_SECRETO_COMPRADOR', 'minertrace-comprador'),
+};
+// Un dueño/vendedor distinto por cooperativa, para poder elegir entre varios vendedores en el mercado.
+const vendedores: Record<VendedorId, Keypair> = {
+  huanuni: claveDe('DEMO_SECRETO_VENDEDOR_HUANUNI', 'minertrace-vendedor-huanuni'),
+  potosi: claveDe('DEMO_SECRETO_VENDEDOR_POTOSI', 'minertrace-vendedor-potosi'),
+  tipuani: claveDe('DEMO_SECRETO_VENDEDOR_TIPUANI', 'minertrace-vendedor-tipuani'),
+  sansimon: claveDe('DEMO_SECRETO_VENDEDOR_SANSIMON', 'minertrace-vendedor-sansimon'),
+  colquiri: claveDe('DEMO_SECRETO_VENDEDOR_COLQUIRI', 'minertrace-vendedor-colquiri'),
+  chojlla: claveDe('DEMO_SECRETO_VENDEDOR_CHOJLLA', 'minertrace-vendedor-chojlla'),
 };
 
 const login = async (email: string): Promise<SesionDemo> => {
@@ -529,16 +568,16 @@ async function anclar(lab: 'A' | 'B', analisisId: string, version: number) {
   throw new Error(`${analisisId} v${version} no se ancló a tiempo`);
 }
 
-async function mercado(accion: string, quien: 'vendedor' | 'comprador', loteId: string, precio?: string) {
-  const par = cuentas[quien];
+async function mercado(accion: string, par: Keypair, loteId: string, precio?: string) {
   const { xdr } = await api<{ xdr: string }>('/mercado/transacciones', {
     json: { accion, cuenta: par.publicKey(), lote_id: loteId, precio },
   });
   const r = await api<{ tx_id: string }>('/mercado/transacciones/enviar', {
     json: { accion, cuenta: par.publicKey(), xdr: firmar(xdr, par) },
   });
-  log(`${accion} (${quien}) · ${EXPLORADOR}${r.tx_id}`);
+  log(`${accion} (${acortar(par.publicKey())}) · ${EXPLORADOR}${r.tx_id}`);
 }
+const acortar = (direccion: string) => `${direccion.slice(0, 5)}…${direccion.slice(-4)}`;
 
 async function contraAnalisis(lote: LoteDemo, pureza: string) {
   const datos: DatosAnalisis = {
@@ -579,10 +618,10 @@ const semilla = (await api(`/analisis/AN-2026-0001`, { sesion: sesiones.A }).cat
 if (semilla?.lote?.id === 'LT-2026-0457') {
   await anclar('A', 'AN-2026-0001', 1);
   const estado = await estadoComercial('LT-2026-0457');
-  if (estado === 'Certificado' && semilla.lote.dueno === cuentas.vendedor.publicKey()) {
-    await mercado('list_batch', 'vendedor', 'LT-2026-0457', '120');
+  if (estado === 'Certificado' && semilla.lote.dueno === vendedores.potosi.publicKey()) {
+    await mercado('list_batch', vendedores.potosi, 'LT-2026-0457', '120');
   } else {
-    log(`estado ${estado}${semilla.lote.dueno !== cuentas.vendedor.publicKey() ? ' (su dueño no es minertrace-vendedor: no se publica)' : ''}`);
+    log(`estado ${estado}${semilla.lote.dueno !== vendedores.potosi.publicKey() ? ' (su dueño no es minertrace-vendedor-potosi: no se publica)' : ''}`);
   }
 } else {
   log('no existe en esta base (se omite)');
@@ -609,7 +648,7 @@ for (const lote of LOTES) {
       peso_kg: lote.peso,
       origen: lote.origen,
       coordenadas: lote.coordenadas,
-      dueno: cuentas.vendedor.publicKey(),
+      dueno: vendedores[lote.vendedor].publicKey(),
     },
   });
   const form = formularioAnalisis(lote.analisis, lote, laboratorio, { lote_id: lote.codigo });
@@ -632,18 +671,20 @@ for (const lote of LOTES) {
   }
 
   if (!lote.precio) continue;
-  await mercado('list_batch', 'vendedor', lote.codigo, lote.precio);
+  await mercado('list_batch', vendedores[lote.vendedor], lote.codigo, lote.precio);
   if (lote.destino === 'en_venta') continue;
-  await mercado('buy', 'comprador', lote.codigo);
+  await mercado('buy', cuentas.comprador, lote.codigo);
   if (lote.contra) await contraAnalisis(lote, lote.contra);
-  if (lote.destino === 'vendido') await mercado('confirm', 'comprador', lote.codigo);
+  if (lote.destino === 'vendido') await mercado('confirm', cuentas.comprador, lote.codigo);
   log(`estado final: ${await estadoComercial(lote.codigo)}`);
 }
 
 console.log(`
 Listo. Abra http://localhost:5173 y revise:
-  Mercado ............ oro (0508), plata (0512), estaño (0457, 0501, 0515, 0517) y wolframio (0506) en venta
-  Mis lotes .......... vendedor: en garantía 0503, 0510, 0516 · en disputa 0504, 0511 · comprador: comprados 0502, 0509, 0513
+  Mercado ............ ${Object.keys(NOMBRE_VENDEDOR).length} vendedores para elegir; en venta: oro (0508), plata (0512),
+                       estaño (0457, 0501, 0515, 0517) y wolframio (0506)
+  Mis lotes .......... conecte la wallet de cada vendedor para ver lo suyo: en garantía 0503, 0510, 0516 · en disputa 0504, 0511
+                       · comprador (minertrace-comprador): comprados 0502, 0509, 0513
   Verificar .......... dos versiones: LT-2026-0505 y LT-2026-0514 · línea de tiempo: LT-2026-0509 o LT-2026-0511
   Portal (LAB-001) ... LT-2026-0507 y LT-2026-0518 esperan la firma con Freighter
   Explorador ......... https://stellar.expert/explorer/testnet/contract/${info.contrato_id}`);

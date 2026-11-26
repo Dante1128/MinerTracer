@@ -7,6 +7,8 @@ import {
   nuevoSalt,
   type DatosAnalisis,
 } from '../integridad/canonico.ts';
+import * as modeloAnalisis from '../modelos/analisis.ts';
+import * as modeloLotes from '../modelos/lotes.ts';
 import type { AnalisisValidado, LoteValidado } from '../validacion.ts';
 
 export interface PdfSubido {
@@ -17,20 +19,19 @@ export interface PdfSubido {
 const anio = () => new Date().getUTCFullYear();
 
 export async function registrarLote(ctx: Contexto, usuario: Usuario, datos: LoteValidado) {
-  let id = datos.codigo;
-  if (!id) {
-    const [{ n }] = await ctx.db.query<{ n: number }>("SELECT nextval('seq_lote') AS n");
-    id = `LT-${anio()}-${String(n).padStart(4, '0')}`;
-  }
-  const [existe] = await ctx.db.query('SELECT 1 FROM lotes WHERE id = $1', [id]);
-  if (existe) throw new ErrorHttp(409, `El lote ${id} ya existe`);
+  const id = datos.codigo || await modeloLotes.siguienteCodigo(ctx.db, anio());
+  if (await modeloLotes.existe(ctx.db, id)) throw new ErrorHttp(409, `El lote ${id} ya existe`);
 
-  const [lote] = await ctx.db.query(
-    `INSERT INTO lotes (id, laboratorio_id, tipo_mineral, peso_kg, origen, coordenadas, creado_por, dueno)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [id, usuario.laboratorio_id, datos.tipo_mineral, datos.peso_kg, datos.origen, datos.coordenadas, usuario.id, datos.dueno],
-  );
-  return lote;
+  return modeloLotes.crear(ctx.db, {
+    id,
+    laboratorio_id: usuario.laboratorio_id,
+    tipo_mineral: datos.tipo_mineral,
+    peso_kg: datos.peso_kg,
+    origen: datos.origen,
+    coordenadas: datos.coordenadas,
+    creado_por: usuario.id,
+    dueno: datos.dueno,
+  });
 }
 
 export async function prepararPdf(pdf: PdfSubido) {
@@ -51,7 +52,7 @@ async function insertarAnalisis(
   pdfNombre: string,
   opciones: OpcionesRegistro,
 ) {
-  const [lote] = await ctx.db.query('SELECT * FROM lotes WHERE id = $1', [datos.lote_id]);
+  const lote = await modeloLotes.buscarPorId(ctx.db, datos.lote_id);
   if (!lote) throw new ErrorHttp(404, `Lote ${datos.lote_id} no encontrado`);
   if (lote.laboratorio_id !== usuario.laboratorio_id) {
     throw new ErrorHttp(403, 'El lote pertenece a otro laboratorio');
@@ -65,19 +66,13 @@ async function insertarAnalisis(
   };
   const hash = hashRegistro(construirRegistro(completo, lote));
 
-  const [fila] = await ctx.db.query(
-    `INSERT INTO analisis (analisis_id, version, lote_id, laboratorio_id, analista_id, fecha_analisis,
-       metodo, pureza, composicion, observaciones, pdf_sha256, salt, version_esquema, hash_anterior,
-       motivo_correccion, hash, pdf_nombre, firma_servidor)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-     RETURNING *`,
-    [
-      completo.analisis_id, completo.version, completo.lote_id, completo.laboratorio_id, usuario.id,
-      completo.fecha_analisis, completo.metodo, completo.pureza, JSON.stringify(completo.composicion),
-      completo.observaciones, completo.pdf_sha256, completo.salt, completo.version_esquema,
-      completo.hash_anterior, completo.motivo_correccion, hash, pdfNombre, opciones.firmaServidor === true,
-    ],
-  );
+  const fila = await modeloAnalisis.insertar(ctx.db, {
+    ...completo,
+    analista_id: usuario.id,
+    hash,
+    pdf_nombre: pdfNombre,
+    firma_servidor: opciones.firmaServidor === true,
+  });
   // El anclaje es asíncrono: el registro ya está a salvo en la base de datos.
   void ctx.procesador.procesar();
   return fila;
@@ -93,18 +88,18 @@ export async function registrarAnalisis(
 ) {
   if (!pdf) throw new ErrorHttp(400, 'Adjunte el informe PDF');
   // Se comprueba antes de guardar el PDF y de consumir la secuencia, para no dejar huérfanos ni saltos.
-  const [lote] = await ctx.db.query('SELECT laboratorio_id FROM lotes WHERE id = $1', [loteId]);
+  const lote = await modeloLotes.buscarPorId(ctx.db, loteId);
   if (!lote) throw new ErrorHttp(404, `Lote ${loteId} no encontrado`);
   if (lote.laboratorio_id !== usuario.laboratorio_id) throw new ErrorHttp(403, 'El lote pertenece a otro laboratorio');
 
   const archivo = await prepararPdf(pdf);
-  const [{ n }] = await ctx.db.query<{ n: number }>("SELECT nextval('seq_analisis') AS n");
+  const analisisId = await modeloAnalisis.siguienteCodigo(ctx.db, anio());
   return insertarAnalisis(
     ctx,
     usuario,
     {
       ...datos,
-      analisis_id: `AN-${anio()}-${String(n).padStart(4, '0')}`,
+      analisis_id: analisisId,
       version: 1,
       lote_id: loteId,
       hash_anterior: null,
@@ -127,10 +122,7 @@ export async function registrarCorreccion(
   opciones: OpcionesRegistro = {},
 ) {
   if (usuario.rol !== 'supervisor') throw new ErrorHttp(403, 'Solo un supervisor puede registrar correcciones');
-  const [anterior] = await ctx.db.query(
-    'SELECT * FROM analisis WHERE analisis_id = $1 ORDER BY version DESC LIMIT 1',
-    [analisisId],
-  );
+  const anterior = await modeloAnalisis.buscarUltimaVersion(ctx.db, analisisId);
   if (!anterior) throw new ErrorHttp(404, `Análisis ${analisisId} no encontrado`);
   if (anterior.laboratorio_id !== usuario.laboratorio_id) {
     throw new ErrorHttp(403, 'El análisis pertenece a otro laboratorio');

@@ -16,6 +16,7 @@ import { Mercado } from './paginas/Mercado.tsx';
 import { MisLotes } from './paginas/MisLotes.tsx';
 import { NuevoAnalisis } from './paginas/NuevoAnalisis.tsx';
 import { Panel } from './paginas/Panel.tsx';
+import { PerfilVendedor } from './paginas/PerfilVendedor.tsx';
 import { ResultadoLote } from './paginas/ResultadoLote.tsx';
 import { Verificar } from './paginas/Verificar.tsx';
 import { ProveedorSesion } from './sesion.tsx';
@@ -32,6 +33,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="verificar" element={<Verificar />} />
               <Route path="verificar/:loteId" element={<ResultadoLote />} />
               <Route path="mercado" element={<Mercado />} />
+              <Route path="mercado/vendedor/:id" element={<PerfilVendedor />} />
               <Route path="mercado/:loteId" element={<DetalleMercado />} />
               <Route path="mis-lotes" element={<MisLotes />} />
               <Route path="laboratorio/login" element={<Login />} />

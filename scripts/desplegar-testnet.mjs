@@ -11,7 +11,8 @@
 // reinicio de testnet): reutiliza las identidades y despliega un contrato nuevo.
 //
 // Variables opcionales:
-//   TOKEN_CONTRATO  contrato del token de pago (por defecto, el XLM nativo de testnet)
+//   TOKEN_CONTRATO  contrato del token de pago (por defecto, un USDC de prueba emitido por este script)
+//   TOKEN_NATIVO=true  usa el XLM nativo de testnet en vez del USDC de prueba
 //   TOLERANCIA_BPS  diferencia de pureza aceptada en un contra-análisis (por defecto 200 = 2.00 %)
 //   PLAZO_GARANTIA_DIAS  días tras la compra en que el vendedor puede cobrar si el comprador
 //                        no confirma ni hay disputa (por defecto 7)
@@ -29,9 +30,18 @@ const CUENTAS = {
   admin: 'minertrace-admin',
   labA: 'minertrace-lab-a',
   labB: 'minertrace-lab-b',
-  vendedor: 'minertrace-vendedor',
+  // Varios vendedores (cooperativas/operaciones mineras) para un mercado con varios vendedores entre los que elegir.
+  vendedorHuanuni: 'minertrace-vendedor-huanuni',
+  vendedorPotosi: 'minertrace-vendedor-potosi',
+  vendedorTipuani: 'minertrace-vendedor-tipuani',
+  vendedorSanSimon: 'minertrace-vendedor-sansimon',
+  vendedorColquiri: 'minertrace-vendedor-colquiri',
+  vendedorChojlla: 'minertrace-vendedor-chojlla',
   comprador: 'minertrace-comprador',
+  // Emisor del USDC de prueba (solo testnet): más fácil de usar en la demo que el XLM nativo.
+  usdc: 'minertrace-usdc',
 };
+const VENDEDORES = ['vendedorHuanuni', 'vendedorPotosi', 'vendedorTipuani', 'vendedorSanSimon', 'vendedorColquiri', 'vendedorChojlla'];
 const LABORATORIOS = [
   ['labA', 'Laboratorio Minero Andino (demo)'],
   ['labB', 'Laboratorio de Contraste del Sur (demo)'],
@@ -83,8 +93,30 @@ paso('Cuentas de prueba (friendbot)');
 const direcciones = Object.fromEntries(Object.entries(CUENTAS).map(([clave, nombre]) => [clave, prepararCuenta(nombre)]));
 
 paso('Token de pago');
-const token = process.env.TOKEN_CONTRATO || stellar(['contract', 'id', 'asset', '--asset', 'native', '--network', RED]);
-console.log(`  ${token}${process.env.TOKEN_CONTRATO ? '' : ' (XLM nativo)'}`);
+let token;
+if (process.env.TOKEN_CONTRATO) {
+  token = process.env.TOKEN_CONTRATO;
+  console.log(`  ${token}`);
+} else if (process.env.TOKEN_NATIVO === 'true') {
+  token = stellar(['contract', 'id', 'asset', '--asset', 'native', '--network', RED]);
+  console.log(`  ${token} (XLM nativo)`);
+} else {
+  // USDC de prueba: un activo clásico emitido por minertrace-usdc, con línea de confianza
+  // y saldo para cada vendedor y el comprador. Mucho más fácil de mostrar en Freighter que XLM.
+  const activo = `USDC:${direcciones.usdc}`;
+  for (const clave of [...VENDEDORES, 'comprador']) {
+    stellar(['tx', 'new', 'change-trust', '--source-account', CUENTAS[clave], '--network', RED, '--line', activo]);
+  }
+  // Los vendedores solo necesitan la línea de confianza (reciben el pago al vender); el
+  // comprador además necesita saldo para poder pagar.
+  stellar([
+    'tx', 'new', 'payment', '--source-account', CUENTAS.usdc, '--network', RED,
+    '--destination', direcciones.comprador, '--asset', activo, '--amount', String(20_000 * 10_000_000),
+  ]);
+  // El Stellar Asset Contract de un activo nuevo hay que instanciarlo (el de XLM ya existe en la red).
+  token = stellar(['contract', 'asset', 'deploy', '--asset', activo, '--source-account', CUENTAS.usdc, '--network', RED]);
+  console.log(`  ${token} (USDC de prueba, emisor ${direcciones.usdc})`);
+}
 
 const tolerancia = process.env.TOLERANCIA_BPS || '200';
 if (!/^\d+$/.test(tolerancia) || Number(tolerancia) > 10000) {
@@ -141,9 +173,14 @@ para verlas: stellar keys secret <nombre>):
   admin       ${direcciones.admin}
   laboratorio ${direcciones.labA}  (${LABORATORIOS[0][1]})
   laboratorio ${direcciones.labB}  (${LABORATORIOS[1][1]})
-  vendedor    ${direcciones.vendedor}
+  vendedor    ${direcciones.vendedorHuanuni}  (Huanuni)
+  vendedor    ${direcciones.vendedorPotosi}  (Potosí)
+  vendedor    ${direcciones.vendedorTipuani}  (Tipuani)
+  vendedor    ${direcciones.vendedorSanSimon}  (San Simón)
+  vendedor    ${direcciones.vendedorColquiri}  (Colquiri)
+  vendedor    ${direcciones.vendedorChojlla}  (Chojlla)
   comprador   ${direcciones.comprador}
-  token       ${token}
+  token       ${token}${direcciones.usdc ? ` (emisor del USDC de prueba: ${direcciones.usdc})` : ''}
 
 Tolerancia de pureza: ${tolerancia} bps · plazo de garantía: ${plazo} s
 `);

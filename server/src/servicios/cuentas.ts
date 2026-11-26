@@ -3,9 +3,10 @@ import { hashSecreto, secretoAleatorio } from '../auth.ts';
 import { ErrorHttp, type Usuario } from '../contexto.ts';
 import { encolarAcceso } from '../correo.ts';
 import type { Consultas, Db } from '../db/index.ts';
+import * as laboratorios from '../modelos/laboratorios.ts';
+import * as usuarios from '../modelos/usuarios.ts';
 import { ErrorValidacion } from '../validacion.ts';
 
-export const CAMPOS_USUARIO = 'id, email, nombre, rol, laboratorio_id, activo';
 export const emailNormalizado = (valor: unknown) => typeof valor === 'string' ? valor.trim().toLowerCase() : '';
 
 export function validarClave(valor: unknown): string {
@@ -45,8 +46,8 @@ export async function emitirRecuperacion(db: Consultas, usuario: { id: number; e
 /** Serializa la administración de un laboratorio y vuelve a comprobar permisos. */
 export async function conSupervisor<T>(db: Db, actor: Usuario, operacion: (conexion: Consultas) => Promise<T>) {
   return db.transaccion(async (conexion) => {
-    await conexion.query('SELECT id FROM laboratorios WHERE id = $1 FOR UPDATE', [actor.laboratorio_id]);
-    const [actual] = await conexion.query("SELECT id FROM usuarios WHERE id = $1 AND laboratorio_id = $2 AND activo AND rol = 'supervisor' FOR UPDATE", [actor.id, actor.laboratorio_id]);
+    await laboratorios.bloquearPorId(conexion, actor.laboratorio_id);
+    const actual = await usuarios.bloquearSupervisorActivo(conexion, actor.id, actor.laboratorio_id);
     if (!actual) throw new ErrorHttp(403, 'Solo los supervisores pueden administrar usuarios');
     return operacion(conexion);
   });

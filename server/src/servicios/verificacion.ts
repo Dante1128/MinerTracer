@@ -2,6 +2,9 @@ import { leerPdf } from '../almacenamiento.ts';
 import { AnclajeNoEncontrado } from '../anclaje/ServicioAnclaje.ts';
 import type { Contexto } from '../contexto.ts';
 import { canonicalizar, construirRegistro, sha256Hex } from '../integridad/canonico.ts';
+import * as analisis from '../modelos/analisis.ts';
+import * as laboratorios from '../modelos/laboratorios.ts';
+import * as lotes from '../modelos/lotes.ts';
 
 export type EstadoVerificacion = 'integro' | 'alterado' | 'pendiente' | 'error';
 
@@ -114,17 +117,10 @@ export async function verificarAnalisis(ctx: Contexto, analisis: any, lote: any,
 
 /** Verifica todas las versiones de los análisis de un lote y la cadena de versiones. */
 export async function verificarLote(ctx: Contexto, loteId: string) {
-  const [lote] = await ctx.db.query('SELECT * FROM lotes WHERE id = $1', [loteId]);
+  const lote = await lotes.buscarPorId(ctx.db, loteId);
   if (!lote) return null;
-  const [laboratorio] = await ctx.db.query(
-    'SELECT id, nombre, cuenta_publica, acreditaciones FROM laboratorios WHERE id = $1',
-    [lote.laboratorio_id],
-  );
-  const filas = await ctx.db.query(
-    `SELECT a.*, u.nombre AS analista_nombre FROM analisis a JOIN usuarios u ON u.id = a.analista_id
-     WHERE a.lote_id = $1 ORDER BY a.analisis_id, a.version`,
-    [loteId],
-  );
+  const laboratorio = await laboratorios.buscarResumen(ctx.db, lote.laboratorio_id);
+  const filas = await analisis.listarPorLote(ctx.db, loteId);
 
   const grupos = new Map<string, any[]>();
   for (const fila of filas) {
