@@ -1,0 +1,8 @@
+{
+  "red": "testnet",
+  "contrato_id": "CDW23R3BPE3UAV3E7ZMUTEIP2PFM4KDYNDIQCCPRPJWEQS634XMQWNYP",
+  "token": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+  "version_comercial": 2,
+  "fecha": "2026-11-26",
+  "huella_wasm": "a5e61e917f247f7acbd65f68dc32f677b601ee27658f7569db6202d34cd25bf5"
+}
