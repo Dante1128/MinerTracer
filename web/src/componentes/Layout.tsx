@@ -18,6 +18,7 @@ export function Layout() {
   const { usuario, salir } = useSesion();
   const ubicacion = useLocation();
   const navegar = useNavigate();
+  const enMercado = /^\/(?:mercado|comercio)(?:\/|$)/.test(ubicacion.pathname);
   const [errorSalida, setErrorSalida] = useState<string | null>(null);
   const [saliendo, setSaliendo] = useState(false);
   const cerrar = async () => {
@@ -42,9 +43,9 @@ export function Layout() {
               <NavLink to="/verificar" className={enlace}>
                 Verificar
               </NavLink>
-              <NavLink to="/comercio" className={enlace}>
-                <span className="sm:hidden">Mercado</span><span className="hidden sm:inline">Comprar y vender</span>
-              </NavLink>
+              <Link to="/mercado" className={enlace({ isActive: enMercado })} aria-current={enMercado ? 'location' : undefined}>
+                Mercado
+              </Link>
               <NavLink to="/operaciones" className={enlace}>
                 Operaciones
               </NavLink>
@@ -99,7 +100,7 @@ export function Layout() {
       <footer className="border-t border-stone-200 py-6 text-center text-xs text-stone-500 print:hidden">
         MinerTrace · Acuerdos claros, origen documentado ·{' '}
         {info === null ? 'Prototipo' : anclajeReal(info) ? `Anclado en Stellar ${info.red}` : 'Prototipo (anclaje simulado)'}
-        <div className="mt-3 flex flex-wrap justify-center gap-5"><Link to="/mercado" className="hover:text-stone-900">Lotes certificados</Link><Link to="/mis-lotes" className="hover:text-stone-900">Mis lotes</Link><Link to="/verificar" className="hover:text-stone-900">Verificar un informe</Link></div>
+        <div className="mt-3 flex flex-wrap justify-center gap-5"><Link to="/mercado" className="hover:text-stone-900">Mercado y vendedores</Link><Link to="/mis-lotes" className="hover:text-stone-900">Mis lotes</Link><Link to="/verificar" className="hover:text-stone-900">Verificar un informe</Link></div>
       </footer>
     </div>
   );
