@@ -3,10 +3,14 @@ extern crate std;
 
 use super::*;
 use soroban_sdk::testutils::{
-    Address as _, AuthorizedFunction, AuthorizedInvocation, Events as _, Ledger, MockAuth, MockAuthInvoke,
+    Address as _, AuthorizedFunction, AuthorizedInvocation, Events as _, Ledger, MockAuth,
+    MockAuthInvoke,
 };
 use soroban_sdk::xdr::{ScErrorCode, ScErrorType};
 use soroban_sdk::{symbol_short, token, Address, BytesN, Env, Event, IntoVal, InvokeError, String};
+
+#[path = "test_comercial.rs"]
+mod comercio;
 
 const TOLERANCIA_BPS: u32 = 200;
 /// Siete días de garantía.
@@ -50,7 +54,10 @@ impl<'a> Prueba<'a> {
         let sac = env.register_stellar_asset_contract_v2(Address::generate(&env));
         token::StellarAssetClient::new(&env, &sac.address()).mint(&comprador, &(2 * PRECIO));
 
-        let id = env.register(MinerTrace, (admin.clone(), sac.address(), TOLERANCIA_BPS, PLAZO_SEG));
+        let id = env.register(
+            MinerTrace,
+            (admin.clone(), sac.address(), TOLERANCIA_BPS, PLAZO_SEG),
+        );
         let contrato = MinerTraceClient::new(&env, &id);
         contrato.add_lab(&lab_a, &texto(&env, "Laboratorio A"));
         contrato.add_lab(&lab_b, &texto(&env, "Laboratorio B"));
@@ -87,7 +94,8 @@ impl<'a> Prueba<'a> {
     }
 
     fn publicar_y_comprar(&self) {
-        self.contrato.list_batch(&self.vendedor, &self.lote(), &PRECIO);
+        self.contrato
+            .list_batch(&self.vendedor, &self.lote(), &PRECIO);
         self.contrato.buy(&self.comprador, &self.lote());
     }
 
@@ -112,8 +120,14 @@ fn laboratorio_no_autorizado() {
     );
     assert_eq!(r, Err(Ok(Error::LaboratorioNoAutorizado)));
     assert!(!p.contrato.is_lab(&intruso));
-    assert_eq!(p.contrato.try_get_batch(&p.lote()), Err(Ok(Error::LoteInexistente)));
-    assert_eq!(p.contrato.try_revoke_lab(&intruso), Err(Ok(Error::LaboratorioInexistente)));
+    assert_eq!(
+        p.contrato.try_get_batch(&p.lote()),
+        Err(Ok(Error::LoteInexistente))
+    );
+    assert_eq!(
+        p.contrato.try_revoke_lab(&intruso),
+        Err(Ok(Error::LaboratorioInexistente))
+    );
 }
 
 #[test]
@@ -142,7 +156,10 @@ fn laboratorio_revocado() {
         Err(Ok(Error::AnalisisNoValido))
     );
     // El registro histórico no se borra.
-    assert_eq!(p.contrato.get_analysis(&texto(&p.env, ANALISIS), &1).hash, hash(&p.env, 1));
+    assert_eq!(
+        p.contrato.get_analysis(&texto(&p.env, ANALISIS), &1).hash,
+        hash(&p.env, 1)
+    );
 }
 
 #[test]
@@ -163,38 +180,62 @@ fn version_duplicada() {
     };
     assert_eq!(registrar(1, None), Err(Ok(Error::VersionDuplicada)));
     assert_eq!(registrar(0, None), Err(Ok(Error::VersionInvalida)));
-    assert_eq!(registrar(3, Some(hash(&p.env, 1))), Err(Ok(Error::VersionAnteriorInexistente)));
+    assert_eq!(
+        registrar(3, Some(hash(&p.env, 1))),
+        Err(Ok(Error::VersionAnteriorInexistente))
+    );
     // La versión 1 sigue intacta.
-    assert_eq!(p.contrato.get_analysis(&texto(&p.env, ANALISIS), &1).pureza_bps, 7500);
+    assert_eq!(
+        p.contrato
+            .get_analysis(&texto(&p.env, ANALISIS), &1)
+            .pureza_bps,
+        7500
+    );
 }
 
 #[test]
 fn hash_anterior_incorrecto() {
     let p = Prueba::nueva();
     p.certificar();
-    let registrar = |lab: &Address, lote: &str, analisis: &str, version: u32, anterior: Option<BytesN<32>>| {
-        p.contrato.try_submit_analysis(
-            lab,
-            &texto(&p.env, lote),
-            &p.vendedor,
-            &texto(&p.env, analisis),
-            &version,
-            &hash(&p.env, 2),
-            &anterior,
-            &7400,
-        )
-    };
-    assert_eq!(registrar(&p.lab_a, LOTE, ANALISIS, 2, Some(hash(&p.env, 7))), Err(Ok(Error::HashAnteriorIncorrecto)));
-    assert_eq!(registrar(&p.lab_a, LOTE, ANALISIS, 2, None), Err(Ok(Error::HashAnteriorIncorrecto)));
+    let registrar =
+        |lab: &Address, lote: &str, analisis: &str, version: u32, anterior: Option<BytesN<32>>| {
+            p.contrato.try_submit_analysis(
+                lab,
+                &texto(&p.env, lote),
+                &p.vendedor,
+                &texto(&p.env, analisis),
+                &version,
+                &hash(&p.env, 2),
+                &anterior,
+                &7400,
+            )
+        };
+    assert_eq!(
+        registrar(&p.lab_a, LOTE, ANALISIS, 2, Some(hash(&p.env, 7))),
+        Err(Ok(Error::HashAnteriorIncorrecto))
+    );
+    assert_eq!(
+        registrar(&p.lab_a, LOTE, ANALISIS, 2, None),
+        Err(Ok(Error::HashAnteriorIncorrecto))
+    );
     assert_eq!(
         registrar(&p.lab_a, LOTE, "AN-2026-0002", 1, Some(hash(&p.env, 1))),
         Err(Ok(Error::HashAnteriorIncorrecto))
     );
     // Con el hash correcto, solo el mismo laboratorio y sobre el mismo lote.
-    assert_eq!(registrar(&p.lab_b, LOTE, ANALISIS, 2, Some(hash(&p.env, 1))), Err(Ok(Error::LaboratorioDistinto)));
-    assert_eq!(registrar(&p.lab_a, "LT-OTRO", ANALISIS, 2, Some(hash(&p.env, 1))), Err(Ok(Error::LoteDistinto)));
+    assert_eq!(
+        registrar(&p.lab_b, LOTE, ANALISIS, 2, Some(hash(&p.env, 1))),
+        Err(Ok(Error::LaboratorioDistinto))
+    );
+    assert_eq!(
+        registrar(&p.lab_a, "LT-OTRO", ANALISIS, 2, Some(hash(&p.env, 1))),
+        Err(Ok(Error::LoteDistinto))
+    );
 
-    assert_eq!(registrar(&p.lab_a, LOTE, ANALISIS, 2, Some(hash(&p.env, 1))), Ok(Ok(())));
+    assert_eq!(
+        registrar(&p.lab_a, LOTE, ANALISIS, 2, Some(hash(&p.env, 1))),
+        Ok(Ok(()))
+    );
     let v2 = p.contrato.get_analysis(&texto(&p.env, ANALISIS), &2);
     assert_eq!(v2.hash_anterior, Some(hash(&p.env, 1)));
     let lote = p.contrato.get_batch(&p.lote());
@@ -219,13 +260,30 @@ fn pureza_y_tolerancia_fuera_de_rango() {
     let env = Env::default();
     let token = Address::generate(&env);
     let resultado = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        env.register(MinerTrace, (Address::generate(&env), token.clone(), 10_001_u32, PLAZO_SEG))
+        env.register(
+            MinerTrace,
+            (
+                Address::generate(&env),
+                token.clone(),
+                10_001_u32,
+                PLAZO_SEG,
+            ),
+        )
     }));
-    assert!(resultado.is_err(), "una tolerancia mayor que 100 % debe rechazarse");
+    assert!(
+        resultado.is_err(),
+        "una tolerancia mayor que 100 % debe rechazarse"
+    );
     let sin_plazo = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        env.register(MinerTrace, (Address::generate(&env), token, TOLERANCIA_BPS, 0_u64))
+        env.register(
+            MinerTrace,
+            (Address::generate(&env), token, TOLERANCIA_BPS, 0_u64),
+        )
     }));
-    assert!(sin_plazo.is_err(), "un plazo de garantía de cero debe rechazarse");
+    assert!(
+        sin_plazo.is_err(),
+        "un plazo de garantía de cero debe rechazarse"
+    );
 }
 
 #[test]
@@ -234,24 +292,48 @@ fn compra_y_confirmacion() {
     p.certificar();
 
     let extrano = Address::generate(&p.env);
-    assert_eq!(p.contrato.try_list_batch(&extrano, &p.lote(), &PRECIO), Err(Ok(Error::NoEsDueno)));
-    assert_eq!(p.contrato.try_list_batch(&p.vendedor, &p.lote(), &0), Err(Ok(Error::PrecioInvalido)));
-    assert_eq!(p.contrato.try_buy(&p.comprador, &p.lote()), Err(Ok(Error::LoteNoDisponible)));
+    assert_eq!(
+        p.contrato.try_list_batch(&extrano, &p.lote(), &PRECIO),
+        Err(Ok(Error::NoEsDueno))
+    );
+    assert_eq!(
+        p.contrato.try_list_batch(&p.vendedor, &p.lote(), &0),
+        Err(Ok(Error::PrecioInvalido))
+    );
+    assert_eq!(
+        p.contrato.try_buy(&p.comprador, &p.lote()),
+        Err(Ok(Error::LoteNoDisponible))
+    );
 
     p.contrato.list_batch(&p.vendedor, &p.lote(), &PRECIO);
     assert_eq!(p.estado(), EstadoLote::EnVenta);
-    assert_eq!(p.contrato.listed_batches(), soroban_sdk::vec![&p.env, p.lote()]);
-    assert_eq!(p.contrato.try_list_batch(&p.vendedor, &p.lote(), &PRECIO), Err(Ok(Error::LoteNoDisponible)));
-    assert_eq!(p.contrato.try_buy(&p.vendedor, &p.lote()), Err(Ok(Error::CompradorEsVendedor)));
+    assert_eq!(
+        p.contrato.listed_batches(),
+        soroban_sdk::vec![&p.env, p.lote()]
+    );
+    assert_eq!(
+        p.contrato.try_list_batch(&p.vendedor, &p.lote(), &PRECIO),
+        Err(Ok(Error::LoteNoDisponible))
+    );
+    assert_eq!(
+        p.contrato.try_buy(&p.vendedor, &p.lote()),
+        Err(Ok(Error::CompradorEsVendedor))
+    );
 
     p.contrato.buy(&p.comprador, &p.lote());
     assert_eq!(p.estado(), EstadoLote::EnGarantia);
     assert_eq!(p.token.balance(&p.comprador), PRECIO);
     assert_eq!(p.token.balance(&p.id), PRECIO);
     assert_eq!(p.contrato.listed_batches().len(), 0);
-    assert_eq!(p.contrato.try_buy(&extrano, &p.lote()), Err(Ok(Error::LoteNoDisponible)));
+    assert_eq!(
+        p.contrato.try_buy(&extrano, &p.lote()),
+        Err(Ok(Error::LoteNoDisponible))
+    );
 
-    assert_eq!(p.contrato.try_confirm(&extrano, &p.lote()), Err(Ok(Error::NoEsComprador)));
+    assert_eq!(
+        p.contrato.try_confirm(&extrano, &p.lote()),
+        Err(Ok(Error::NoEsComprador))
+    );
     p.contrato.confirm(&p.comprador, &p.lote());
     let lote = p.contrato.get_batch(&p.lote());
     assert_eq!(lote.estado, EstadoLote::Vendido);
@@ -259,11 +341,18 @@ fn compra_y_confirmacion() {
     assert_eq!(p.contrato.try_get_sale(&p.lote()), Err(Ok(Error::SinVenta)));
     assert_eq!(p.token.balance(&p.vendedor), PRECIO);
     assert_eq!(p.token.balance(&p.id), 0);
-    assert_eq!(p.contrato.try_confirm(&p.comprador, &p.lote()), Err(Ok(Error::LoteNoDisponible)));
+    assert_eq!(
+        p.contrato.try_confirm(&p.comprador, &p.lote()),
+        Err(Ok(Error::LoteNoDisponible))
+    );
 
     // El nuevo dueño puede revender; el anterior ya no.
-    assert_eq!(p.contrato.try_list_batch(&p.vendedor, &p.lote(), &PRECIO), Err(Ok(Error::NoEsDueno)));
-    p.contrato.list_batch(&p.comprador, &p.lote(), &(PRECIO / 2));
+    assert_eq!(
+        p.contrato.try_list_batch(&p.vendedor, &p.lote(), &PRECIO),
+        Err(Ok(Error::NoEsDueno))
+    );
+    p.contrato
+        .list_batch(&p.comprador, &p.lote(), &(PRECIO / 2));
     assert_eq!(p.estado(), EstadoLote::EnVenta);
 }
 
@@ -274,33 +363,41 @@ fn contra_analisis_dentro_de_tolerancia() {
     p.contrato.list_batch(&p.vendedor, &p.lote(), &PRECIO);
     // Sin compra no hay garantía que comprobar.
     assert_eq!(
-        p.contrato.try_counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 5), &7300),
+        p.contrato
+            .try_counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 5), &7300),
         Err(Ok(Error::LoteNoDisponible))
     );
     p.contrato.buy(&p.comprador, &p.lote());
 
     assert_eq!(
-        p.contrato.try_counter_analysis(&p.lab_a, &p.lote(), &hash(&p.env, 5), &7300),
+        p.contrato
+            .try_counter_analysis(&p.lab_a, &p.lote(), &hash(&p.env, 5), &7300),
         Err(Ok(Error::MismoLaboratorio))
     );
     let intruso = Address::generate(&p.env);
     assert_eq!(
-        p.contrato.try_counter_analysis(&intruso, &p.lote(), &hash(&p.env, 5), &7300),
+        p.contrato
+            .try_counter_analysis(&intruso, &p.lote(), &hash(&p.env, 5), &7300),
         Err(Ok(Error::LaboratorioNoAutorizado))
     );
 
     // 75.00 % frente a 73.00 %: la diferencia es justo la tolerancia (2.00 %).
-    p.contrato.counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 5), &7300);
+    p.contrato
+        .counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 5), &7300);
     let lote = p.contrato.get_batch(&p.lote());
     assert_eq!(lote.estado, EstadoLote::EnGarantia);
     let contra = p.contrato.get_counter_analysis(&p.lote());
     assert_eq!((contra.lab, contra.diferencia_bps), (p.lab_b.clone(), 200));
 
     assert_eq!(
-        p.contrato.try_counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 6), &5000),
+        p.contrato
+            .try_counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 6), &5000),
         Err(Ok(Error::ContraAnalisisExistente))
     );
-    assert_eq!(p.contrato.try_refund(&p.comprador, &p.lote()), Err(Ok(Error::LoteNoDisponible)));
+    assert_eq!(
+        p.contrato.try_refund(&p.comprador, &p.lote()),
+        Err(Ok(Error::LoteNoDisponible))
+    );
 
     p.contrato.confirm(&p.comprador, &p.lote());
     assert_eq!(p.estado(), EstadoLote::Vendido);
@@ -314,12 +411,25 @@ fn contra_analisis_fuera_de_tolerancia_con_reembolso() {
     p.publicar_y_comprar();
 
     // 75.00 % frente a 72.00 %: 3 puntos, más que la tolerancia.
-    p.contrato.counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 5), &7200);
+    p.contrato
+        .counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 5), &7200);
     assert_eq!(p.estado(), EstadoLote::EnDisputa);
-    assert_eq!(p.contrato.try_confirm(&p.comprador, &p.lote()), Err(Ok(Error::LoteEnDisputa)));
+    assert_eq!(
+        p.contrato.try_confirm(&p.comprador, &p.lote()),
+        Err(Ok(Error::LoteEnDisputa))
+    );
     let extrano = Address::generate(&p.env);
-    assert_eq!(p.contrato.try_refund(&extrano, &p.lote()), Err(Ok(Error::NoEsComprador)));
+    assert_eq!(
+        p.contrato.try_refund(&extrano, &p.lote()),
+        Err(Ok(Error::NoEsComprador))
+    );
 
+    assert_eq!(
+        p.contrato.try_refund(&p.comprador, &p.lote()),
+        Err(Ok(Error::DevolucionNoAcreditada))
+    );
+    p.contrato
+        .registrar_devolucion(&p.lab_a, &p.lote(), &hash(&p.env, 11));
     p.contrato.refund(&p.comprador, &p.lote());
     assert_eq!(p.token.balance(&p.comprador), 2 * PRECIO);
     assert_eq!(p.token.balance(&p.id), 0);
@@ -328,8 +438,14 @@ fn contra_analisis_fuera_de_tolerancia_con_reembolso() {
     assert_eq!(lote.estado, EstadoLote::EnDisputa);
     assert_eq!(p.contrato.try_get_sale(&p.lote()), Err(Ok(Error::SinVenta)));
     assert_eq!(lote.dueno, p.vendedor, "el lote sigue siendo del vendedor");
-    assert_eq!(p.contrato.try_refund(&p.comprador, &p.lote()), Err(Ok(Error::LoteNoDisponible)));
-    assert_eq!(p.contrato.try_list_batch(&p.vendedor, &p.lote(), &PRECIO), Err(Ok(Error::LoteEnDisputa)));
+    assert_eq!(
+        p.contrato.try_refund(&p.comprador, &p.lote()),
+        Err(Ok(Error::LoteNoDisponible))
+    );
+    assert_eq!(
+        p.contrato.try_list_batch(&p.vendedor, &p.lote(), &PRECIO),
+        Err(Ok(Error::LoteEnDisputa))
+    );
 
     // Un análisis de otro laboratorio no desbloquea el lote...
     p.contrato.submit_analysis(
@@ -376,7 +492,8 @@ fn una_correccion_durante_la_garantia_no_cambia_lo_vendido() {
         &7200,
     );
     // El contra-análisis se compara con los 75.00 % que se vendieron, no con la corrección.
-    p.contrato.counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 5), &7200);
+    p.contrato
+        .counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 5), &7200);
     assert_eq!(p.estado(), EstadoLote::EnDisputa);
 }
 
@@ -392,20 +509,34 @@ fn llamadas_sin_la_autorizacion_correcta() {
     let lab = Address::generate(&env);
     let intruso = Address::generate(&env);
     let sac = env.register_stellar_asset_contract_v2(Address::generate(&env));
-    let id = env.register(MinerTrace, (admin.clone(), sac.address(), TOLERANCIA_BPS, PLAZO_SEG));
+    let id = env.register(
+        MinerTrace,
+        (admin.clone(), sac.address(), TOLERANCIA_BPS, PLAZO_SEG),
+    );
     let contrato = MinerTraceClient::new(&env, &id);
     let nombre = texto(&env, "Laboratorio A");
     let firma_de = |firmante: &Address, fn_name: &'static str, args: soroban_sdk::Vec<Val>| {
         env.mock_auths(&[MockAuth {
             address: firmante,
-            invoke: &MockAuthInvoke { contract: &id, fn_name, args, sub_invokes: &[] },
+            invoke: &MockAuthInvoke {
+                contract: &id,
+                fn_name,
+                args,
+                sub_invokes: &[],
+            },
         }]);
     };
 
     // Sin ninguna firma, y firmado por alguien que no es el admin.
-    assert_eq!(contrato.try_add_lab(&lab, &nombre), Err(Ok(falta_autorizacion())));
+    assert_eq!(
+        contrato.try_add_lab(&lab, &nombre),
+        Err(Ok(falta_autorizacion()))
+    );
     firma_de(&intruso, "add_lab", (&lab, &nombre).into_val(&env));
-    assert_eq!(contrato.try_add_lab(&lab, &nombre), Err(Ok(falta_autorizacion())));
+    assert_eq!(
+        contrato.try_add_lab(&lab, &nombre),
+        Err(Ok(falta_autorizacion()))
+    );
     assert!(!contrato.is_lab(&lab));
 
     firma_de(&admin, "add_lab", (&lab, &nombre).into_val(&env));
@@ -420,17 +551,47 @@ fn llamadas_sin_la_autorizacion_correcta() {
     // Un análisis a nombre del laboratorio firmado por otra cuenta.
     let lote = texto(&env, LOTE);
     let analisis = texto(&env, ANALISIS);
-    let args = (&lab, &lote, &intruso, &analisis, 1_u32, hash(&env, 1), Option::<BytesN<32>>::None, 7500_u32);
+    let args = (
+        &lab,
+        &lote,
+        &intruso,
+        &analisis,
+        1_u32,
+        hash(&env, 1),
+        Option::<BytesN<32>>::None,
+        7500_u32,
+    );
     firma_de(&intruso, "submit_analysis", args.into_val(&env));
     assert_eq!(
-        contrato.try_submit_analysis(&lab, &lote, &intruso, &analisis, &1, &hash(&env, 1), &None, &7500),
+        contrato.try_submit_analysis(
+            &lab,
+            &lote,
+            &intruso,
+            &analisis,
+            &1,
+            &hash(&env, 1),
+            &None,
+            &7500
+        ),
         Err(Err(InvokeError::Abort))
     );
-    assert_eq!(contrato.try_get_batch(&lote), Err(Ok(Error::LoteInexistente)));
+    assert_eq!(
+        contrato.try_get_batch(&lote),
+        Err(Ok(Error::LoteInexistente))
+    );
 
     // Con la firma correcta, el mismo análisis se registra.
     firma_de(&lab, "submit_analysis", args.into_val(&env));
-    contrato.submit_analysis(&lab, &lote, &intruso, &analisis, &1, &hash(&env, 1), &None, &7500);
+    contrato.submit_analysis(
+        &lab,
+        &lote,
+        &intruso,
+        &analisis,
+        &1,
+        &hash(&env, 1),
+        &None,
+        &7500,
+    );
     assert_eq!(contrato.get_batch(&lote).estado, EstadoLote::Certificado);
 }
 
@@ -470,9 +631,23 @@ fn cada_accion_emite_un_evento() {
     let eventos = || env.events().all().filter_by_contract(&p.id);
 
     p.contrato.revoke_lab(&p.lab_b);
-    assert_eq!(eventos(), [LaboratorioRevocado { lab: p.lab_b.clone(), nombre: texto(env, "Laboratorio B") }.to_xdr(env, &p.id)]);
+    assert_eq!(
+        eventos(),
+        [LaboratorioRevocado {
+            lab: p.lab_b.clone(),
+            nombre: texto(env, "Laboratorio B")
+        }
+        .to_xdr(env, &p.id)]
+    );
     p.contrato.add_lab(&p.lab_b, &texto(env, "Laboratorio B"));
-    assert_eq!(eventos(), [LaboratorioAgregado { lab: p.lab_b.clone(), nombre: texto(env, "Laboratorio B") }.to_xdr(env, &p.id)]);
+    assert_eq!(
+        eventos(),
+        [LaboratorioAgregado {
+            lab: p.lab_b.clone(),
+            nombre: texto(env, "Laboratorio B")
+        }
+        .to_xdr(env, &p.id)]
+    );
 
     p.certificar();
     assert_eq!(
@@ -491,16 +666,28 @@ fn cada_accion_emite_un_evento() {
     p.contrato.list_batch(&p.vendedor, &p.lote(), &PRECIO);
     assert_eq!(
         eventos(),
-        [LotePublicado { lote_id: p.lote(), vendedor: p.vendedor.clone(), precio: PRECIO, pureza_bps: 7500 }.to_xdr(env, &p.id)]
+        [LotePublicado {
+            lote_id: p.lote(),
+            vendedor: p.vendedor.clone(),
+            precio: PRECIO,
+            pureza_bps: 7500
+        }
+        .to_xdr(env, &p.id)]
     );
 
     p.contrato.buy(&p.comprador, &p.lote());
     assert_eq!(
         eventos(),
-        [LoteComprado { lote_id: p.lote(), comprador: p.comprador.clone(), precio: PRECIO }.to_xdr(env, &p.id)]
+        [LoteComprado {
+            lote_id: p.lote(),
+            comprador: p.comprador.clone(),
+            precio: PRECIO
+        }
+        .to_xdr(env, &p.id)]
     );
 
-    p.contrato.counter_analysis(&p.lab_b, &p.lote(), &hash(env, 5), &7000);
+    p.contrato
+        .counter_analysis(&p.lab_b, &p.lote(), &hash(env, 5), &7000);
     assert_eq!(
         eventos(),
         [ContraAnalisisRegistrado {
@@ -514,22 +701,43 @@ fn cada_accion_emite_un_evento() {
         .to_xdr(env, &p.id)]
     );
 
+    p.contrato
+        .registrar_devolucion(&p.lab_a, &p.lote(), &hash(env, 11));
     p.contrato.refund(&p.comprador, &p.lote());
     assert_eq!(
         eventos(),
-        [Reembolsado { lote_id: p.lote(), comprador: p.comprador.clone(), precio: PRECIO }.to_xdr(env, &p.id)]
+        [Reembolsado {
+            lote_id: p.lote(),
+            comprador: p.comprador.clone(),
+            precio: PRECIO
+        }
+        .to_xdr(env, &p.id)]
     );
 
     // Confirmación en un segundo lote.
     let otro = texto(env, "LT-2026-0458");
-    p.contrato.submit_analysis(&p.lab_a, &otro, &p.vendedor, &texto(env, "AN-2026-0009"), &1, &hash(env, 9), &None, &8000);
+    p.contrato.submit_analysis(
+        &p.lab_a,
+        &otro,
+        &p.vendedor,
+        &texto(env, "AN-2026-0009"),
+        &1,
+        &hash(env, 9),
+        &None,
+        &8000,
+    );
     p.contrato.list_batch(&p.vendedor, &otro, &PRECIO);
     p.contrato.buy(&p.comprador, &otro);
     p.contrato.confirm(&p.comprador, &otro);
     assert_eq!(
         eventos(),
-        [VentaConfirmada { lote_id: otro, vendedor: p.vendedor.clone(), comprador: p.comprador.clone(), precio: PRECIO }
-            .to_xdr(env, &p.id)]
+        [VentaConfirmada {
+            lote_id: otro,
+            vendedor: p.vendedor.clone(),
+            comprador: p.comprador.clone(),
+            precio: PRECIO
+        }
+        .to_xdr(env, &p.id)]
     );
 }
 
@@ -539,31 +747,68 @@ fn el_vendedor_cobra_si_vence_el_plazo_sin_confirmacion() {
     p.env.ledger().with_mut(|l| l.timestamp = 1_000_000);
     p.certificar();
     p.publicar_y_comprar();
+    assert_eq!(p.contrato.get_sale(&p.lote()).vence_garantia, None);
+    assert_eq!(
+        p.contrato.try_claim(&p.vendedor, &p.lote()),
+        Err(Ok(Error::SinRecepcion))
+    );
+    p.contrato
+        .atestiguar_entrega(&p.lab_a, &p.lote(), &hash(&p.env, 12));
     let venta = p.contrato.get_sale(&p.lote());
     assert_eq!(venta.vence_garantia, Some(1_000_000 + PLAZO_SEG));
 
     // Antes de vencer, solo el comprador puede liberar el pago.
-    assert_eq!(p.contrato.try_claim(&p.vendedor, &p.lote()), Err(Ok(Error::PlazoNoVencido)));
-    p.env.ledger().with_mut(|l| l.timestamp = 1_000_000 + PLAZO_SEG - 1);
-    assert_eq!(p.contrato.try_claim(&p.vendedor, &p.lote()), Err(Ok(Error::PlazoNoVencido)));
+    assert_eq!(
+        p.contrato.try_claim(&p.vendedor, &p.lote()),
+        Err(Ok(Error::PlazoNoVencido))
+    );
+    p.env
+        .ledger()
+        .with_mut(|l| l.timestamp = 1_000_000 + PLAZO_SEG - 1);
+    assert_eq!(
+        p.contrato.try_claim(&p.vendedor, &p.lote()),
+        Err(Ok(Error::PlazoNoVencido))
+    );
 
-    p.env.ledger().with_mut(|l| l.timestamp = 1_000_000 + PLAZO_SEG);
+    p.env
+        .ledger()
+        .with_mut(|l| l.timestamp = 1_000_000 + PLAZO_SEG);
     let extrano = Address::generate(&p.env);
-    assert_eq!(p.contrato.try_claim(&extrano, &p.lote()), Err(Ok(Error::NoEsVendedor)));
-    assert_eq!(p.contrato.try_claim(&p.comprador, &p.lote()), Err(Ok(Error::NoEsVendedor)));
+    assert_eq!(
+        p.contrato.try_claim(&extrano, &p.lote()),
+        Err(Ok(Error::NoEsVendedor))
+    );
+    assert_eq!(
+        p.contrato.try_claim(&p.comprador, &p.lote()),
+        Err(Ok(Error::NoEsVendedor))
+    );
 
     p.contrato.claim(&p.vendedor, &p.lote());
     assert_eq!(
         p.env.events().all().filter_by_contract(&p.id),
-        [PagoReclamado { lote_id: p.lote(), vendedor: p.vendedor.clone(), comprador: p.comprador.clone(), precio: PRECIO }
-            .to_xdr(&p.env, &p.id)]
+        [PagoReclamado {
+            lote_id: p.lote(),
+            vendedor: p.vendedor.clone(),
+            comprador: p.comprador.clone(),
+            precio: PRECIO
+        }
+        .to_xdr(&p.env, &p.id)]
     );
     let lote = p.contrato.get_batch(&p.lote());
-    assert_eq!((lote.estado, lote.dueno), (EstadoLote::Vendido, p.comprador.clone()));
+    assert_eq!(
+        (lote.estado, lote.dueno),
+        (EstadoLote::Vendido, p.comprador.clone())
+    );
     assert_eq!(p.token.balance(&p.vendedor), PRECIO);
     assert_eq!(p.token.balance(&p.id), 0);
-    assert_eq!(p.contrato.try_claim(&p.vendedor, &p.lote()), Err(Ok(Error::LoteNoDisponible)));
-    assert_eq!(p.contrato.try_confirm(&p.comprador, &p.lote()), Err(Ok(Error::LoteNoDisponible)));
+    assert_eq!(
+        p.contrato.try_claim(&p.vendedor, &p.lote()),
+        Err(Ok(Error::LoteNoDisponible))
+    );
+    assert_eq!(
+        p.contrato.try_confirm(&p.comprador, &p.lote()),
+        Err(Ok(Error::LoteNoDisponible))
+    );
 }
 
 #[test]
@@ -571,10 +816,16 @@ fn en_disputa_el_vendedor_no_cobra_aunque_venza_el_plazo() {
     let p = Prueba::nueva();
     p.certificar();
     p.publicar_y_comprar();
-    p.contrato.counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 5), &7000);
+    p.contrato
+        .counter_analysis(&p.lab_b, &p.lote(), &hash(&p.env, 5), &7000);
     p.env.ledger().with_mut(|l| l.timestamp += PLAZO_SEG * 2);
-    assert_eq!(p.contrato.try_claim(&p.vendedor, &p.lote()), Err(Ok(Error::LoteEnDisputa)));
+    assert_eq!(
+        p.contrato.try_claim(&p.vendedor, &p.lote()),
+        Err(Ok(Error::LoteEnDisputa))
+    );
     // El comprador sigue pudiendo recuperar su dinero.
+    p.contrato
+        .registrar_devolucion(&p.lab_a, &p.lote(), &hash(&p.env, 11));
     p.contrato.refund(&p.comprador, &p.lote());
     assert_eq!(p.token.balance(&p.comprador), 2 * PRECIO);
 }
@@ -583,10 +834,16 @@ fn en_disputa_el_vendedor_no_cobra_aunque_venza_el_plazo() {
 fn el_plazo_se_guarda_en_la_configuracion() {
     let p = Prueba::nueva();
     let config = p.contrato.get_config();
-    assert_eq!((config.tolerancia_bps, config.plazo_garantia_seg), (TOLERANCIA_BPS, PLAZO_SEG));
+    assert_eq!(
+        (config.tolerancia_bps, config.plazo_garantia_seg),
+        (TOLERANCIA_BPS, PLAZO_SEG)
+    );
     // Sin compra no hay vencimiento.
     p.certificar();
     p.contrato.list_batch(&p.vendedor, &p.lote(), &PRECIO);
     assert_eq!(p.contrato.get_sale(&p.lote()).vence_garantia, None);
-    assert_eq!(p.contrato.try_claim(&p.vendedor, &p.lote()), Err(Ok(Error::LoteNoDisponible)));
+    assert_eq!(
+        p.contrato.try_claim(&p.vendedor, &p.lote()),
+        Err(Ok(Error::LoteNoDisponible))
+    );
 }
