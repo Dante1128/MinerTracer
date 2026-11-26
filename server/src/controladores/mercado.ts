@@ -1,9 +1,13 @@
 import type { Request, Response } from 'express';
+import { randomUUID } from 'node:crypto';
 import { ErrorHttp, type Contexto } from '../contexto.ts';
 import { ACCIONES, validarCuenta, type Accion } from '../mercado/mercado.ts';
 import * as contraAnalisisModelo from '../modelos/contraAnalisis.ts';
 import * as lotesModelo from '../modelos/lotes.ts';
+import { buscarPublicoPorCuenta } from '../modelos/perfilesComerciales.ts';
 import { requiereMercado, verificarContraAnalisis } from '../servicios/contraAnalisis.ts';
+import { comprobarAnalisisParaCompra } from '../servicios/compra.ts';
+import { huellaInvocacion } from '../stellar/contrato.ts';
 import { CODIGO_LOTE } from '../validacion.ts';
 
 /** Controlador: marketplace con garantía, público (sin sesión), ver ../rutas/mercado.ts. */
@@ -76,13 +80,26 @@ export async function lotesDeCuenta(ctx: Contexto, req: Request, res: Response) 
   res.json(await requiereMercado(ctx).lotesDeCuenta(validarCuenta(req.params.cuenta)));
 }
 
+/** Perfil declarado de la cuenta vendedora, sin información de contacto ni documentos privados. */
+export async function perfilDeCuenta(ctx: Contexto, req: Request, res: Response) {
+  const perfil = await buscarPublicoPorCuenta(ctx.db, validarCuenta(req.params.cuenta));
+  if (!perfil) throw new ErrorHttp(404, 'La cuenta todavía no tiene un perfil comercial público');
+  res.json(perfil);
+}
+
 /** Arma la transacción sin firmar; la firma la wallet de la cuenta. */
 export async function prepararTransaccion(ctx: Contexto, req: Request, res: Response) {
   const mercado = requiereMercado(ctx);
   const accion = accionDe(req.body?.accion);
   const cuenta = validarCuenta(req.body?.cuenta);
-  const xdr = await mercado.prepararTransaccion(accion, cuenta, loteDe(req), req.body?.precio);
-  res.json({ xdr, passphrase: (await mercado.info()).passphrase });
+  if (accion === 'buy') await comprobarAnalisisParaCompra(ctx, loteDe(req));
+  const loteId = loteDe(req);
+  const esperado = accion === 'buy' ? { total: String(req.body?.total_esperado ?? ''), analisis_id: String(req.body?.analisis_id_esperado ?? ''), version: req.body?.version_esperada, orden_id: typeof req.body?.orden_id === 'string' ? req.body.orden_id : undefined } : undefined;
+  const xdr = await mercado.prepararTransaccion(accion, cuenta, loteId, req.body?.precio, esperado);
+  const id = randomUUID();
+  await ctx.db.query(`INSERT INTO comercio_transacciones (id,cuenta,accion,lote_id,invocacion_hash,vence)
+    VALUES ($1,$2,$3,$4,$5,$6)`, [id,cuenta,accion,loteId,huellaInvocacion(xdr),new Date(Date.now()+5*60_000)]);
+  res.json({ xdr, preparacion_id: id, passphrase: (await mercado.info()).passphrase });
 }
 
 /** Envía la transacción firmada por la wallet y espera la confirmación. */
@@ -92,6 +109,20 @@ export async function enviarTransaccion(ctx: Contexto, req: Request, res: Respon
   const cuenta = validarCuenta(req.body?.cuenta);
   const xdr = String(req.body?.xdr ?? '');
   if (!xdr) throw new ErrorHttp(400, 'Falta la transacción firmada');
-  const resultado = await mercado.enviarTransaccion(accion, cuenta, xdr);
-  res.json({ tx_id: resultado.txId, ledger: resultado.ledger, fecha: resultado.fecha, url_explorador: URL_EXPLORADOR + resultado.txId });
+  const id = typeof req.body?.preparacion_id === 'string' ? req.body.preparacion_id : '';
+  const [preparacion] = await ctx.db.query<{ invocacion_hash: string; tx_id: string | null; fecha: string | null; vence: string }>(
+    'SELECT invocacion_hash,tx_id,fecha,vence FROM comercio_transacciones WHERE id=$1 AND cuenta=$2 AND accion=$3', [id,cuenta,accion]);
+  if (!preparacion || preparacion.invocacion_hash !== huellaInvocacion(xdr)) throw new ErrorHttp(403, 'Prepare y firme las condiciones exactas de esta operación');
+  if (preparacion.tx_id) { res.json({ tx_id: preparacion.tx_id, fecha: preparacion.fecha, url_explorador: URL_EXPLORADOR + preparacion.tx_id }); return; }
+  if (new Date(preparacion.vence).getTime() <= Date.now()) throw new ErrorHttp(409, 'La transacción preparada venció; vuelva a intentarlo');
+  const [reservada] = await ctx.db.query('UPDATE comercio_transacciones SET enviando=true WHERE id=$1 AND NOT enviando AND tx_id IS NULL RETURNING id', [id]);
+  if (!reservada) throw new ErrorHttp(409, 'Esta transacción ya se está enviando; actualice su estado');
+  try {
+    const resultado = await mercado.enviarTransaccion(accion, cuenta, xdr);
+    await ctx.db.query('UPDATE comercio_transacciones SET tx_id=$2,fecha=$3,enviando=false WHERE id=$1', [id,resultado.txId,resultado.fecha]);
+    res.json({ tx_id: resultado.txId, ledger: resultado.ledger, fecha: resultado.fecha, url_explorador: URL_EXPLORADOR + resultado.txId });
+  } catch (error) {
+    await ctx.db.query('UPDATE comercio_transacciones SET enviando=false WHERE id=$1 AND tx_id IS NULL', [id]);
+    throw error;
+  }
 }

@@ -23,7 +23,7 @@ const EXPLORADOR = 'https://stellar.expert/explorer/testnet/tx/';
 
 type Destino = 'en_venta' | 'vendido' | 'en_garantia' | 'disputa' | 'corregido' | 'sin_firmar';
 
-/** Cooperativas/operaciones mineras que venden sus lotes: varios vendedores entre los que elegir en el mercado. */
+/** Nombres ilustrativos de cooperativas para datos sint?ticos; no acreditan identidad ni participaci?n real. */
 type VendedorId = 'huanuni' | 'potosi' | 'tipuani' | 'sansimon' | 'colquiri' | 'chojlla';
 
 const NOMBRE_VENDEDOR: Record<VendedorId, string> = {
@@ -569,15 +569,18 @@ async function anclar(lab: 'A' | 'B', analisisId: string, version: number) {
 }
 
 async function mercado(accion: string, par: Keypair, loteId: string, precio?: string) {
-  const { xdr } = await api<{ xdr: string }>('/mercado/transacciones', {
-    json: { accion, cuenta: par.publicKey(), lote_id: loteId, precio },
+  const detalle = accion === 'buy' ? await api(`/mercado/lotes/${loteId}`) : null;
+  const venta = detalle?.estado?.venta;
+  const preparado = await api<{ xdr: string; preparacion_id: string }>('/mercado/transacciones', {
+    json: { accion, cuenta: par.publicKey(), lote_id: loteId, precio,
+      ...(accion === 'buy' && venta ? { total_esperado: detalle.estado.venta_comercial?.total ?? venta.precio,
+        analisis_id_esperado: venta.analisis_id, version_esperada: venta.version, orden_id: detalle.estado.venta_comercial?.orden_id ?? undefined } : {}) },
   });
   const r = await api<{ tx_id: string }>('/mercado/transacciones/enviar', {
-    json: { accion, cuenta: par.publicKey(), xdr: firmar(xdr, par) },
+    json: { accion, cuenta: par.publicKey(), xdr: firmar(preparado.xdr, par), preparacion_id: preparado.preparacion_id },
   });
-  log(`${accion} (${acortar(par.publicKey())}) · ${EXPLORADOR}${r.tx_id}`);
+  log(`${accion} (${par.publicKey().slice(0, 5)}?${par.publicKey().slice(-4)}) · ${EXPLORADOR}${r.tx_id}`);
 }
-const acortar = (direccion: string) => `${direccion.slice(0, 5)}…${direccion.slice(-4)}`;
 
 async function contraAnalisis(lote: LoteDemo, pureza: string) {
   const datos: DatosAnalisis = {

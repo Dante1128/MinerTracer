@@ -2,16 +2,19 @@ import { Router } from 'express';
 import * as mercado from '../controladores/mercado.ts';
 import type { Contexto } from '../contexto.ts';
 import { enlazar, type Controlador } from './enlazar.ts';
+import { rutasTransaccionesComerciales } from './transaccionesComerciales.ts';
 
 /** Rutas: marketplace con garantía, público, sin sesión (lógica en ../controladores/mercado.ts). */
 export function rutasMercado(ctx: Contexto) {
   const r = Router();
   const con = (controlador: Controlador) => enlazar(ctx, controlador);
+  r.use('/comercial', rutasTransaccionesComerciales(ctx));
 
   r.get('/info', con(mercado.info));
   r.get('/lotes', con(mercado.listarLotes));
   r.get('/lotes/:loteId', con(mercado.verLote));
   r.get('/cuentas/:cuenta/lotes', con(mercado.lotesDeCuenta));
+  r.get('/cuentas/:cuenta/perfil', con(mercado.perfilDeCuenta));
   r.post('/transacciones', con(mercado.prepararTransaccion));
   r.post('/transacciones/enviar', con(mercado.enviarTransaccion));
 

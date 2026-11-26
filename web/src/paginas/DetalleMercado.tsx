@@ -29,11 +29,15 @@ export function DetalleMercado() {
   const { lote, laboratorio } = resultado;
   const estado = detalle?.estado;
   const venta = estado?.venta;
+  const comercial = estado?.venta_comercial;
+  const total = comercial?.total ?? venta?.precio;
+  const reservadoParaOtro = !!comercial?.comprador_reservado && comercial.comprador_reservado !== wallet.direccion;
   const esVendedor = venta?.vendedor === wallet.direccion;
   const integro = resultado.analisis.length > 0 && resultado.analisis.every((a) => a.vigente.verificacion.estado === 'integro');
 
   const comprar = async () => {
-    if (await compra.ejecutar('buy', lote.id)) setRecarga((n) => n + 1);
+    if (!venta || !total) return;
+    if (await compra.ejecutar('buy', lote.id, undefined, { total_esperado: total, analisis_id_esperado: venta.analisis_id, version_esperada: venta.version, orden_id: comercial?.orden_id ?? undefined })) setRecarga((n) => n + 1);
   };
 
   const acciones =
@@ -52,9 +56,9 @@ export function DetalleMercado() {
             <button
               className="boton-primario"
               onClick={() => void comprar()}
-              disabled={compra.ocupado || !wallet.direccion || !wallet.redCorrecta}
+              disabled={compra.ocupado || !wallet.direccion || !wallet.redCorrecta || !integro || reservadoParaOtro}
             >
-              {compra.ocupado ? 'Procesando…' : `Comprar por ${formatoPrecio(venta.precio, info.token)}`}
+              {compra.ocupado ? 'Procesando…' : reservadoParaOtro ? 'Reservado para otro comprador' : `Comprar por ${formatoPrecio(total!, info.token)}`}
             </button>
             <p className="text-xs text-stone-500">
               El pago queda retenido en el contrato hasta que confirme la recepción desde{' '}
@@ -65,6 +69,12 @@ export function DetalleMercado() {
             </p>
           </div>
         )}
+        {comercial && <dl className="grid gap-3 rounded-xl bg-stone-50 p-4 text-sm sm:grid-cols-3">
+          <div><dt className="text-stone-500">Precio del mineral</dt><dd className="mt-1 font-semibold">{formatoPrecio(venta.precio, info.token)}</dd></div>
+          <div><dt className="text-stone-500">Comisión del comprador</dt><dd className="mt-1 font-semibold">{formatoPrecio(comercial.comision, info.token)}</dd></div>
+          <div><dt className="text-stone-500">Ayuda al ensayo acreditada</dt><dd className="mt-1 font-semibold text-emerald-800">{formatoPrecio(comercial.reintegro, info.token)}</dd></div>
+        </dl>}
+        {comercial?.orden_id && <Link className="inline-block text-sm font-semibold text-amber-800 underline" to={`/operaciones/${comercial.orden_id}`}>Ver el acuerdo, la entrega y los importes completos →</Link>}
         <EstadoTransaccion paso={compra.paso} error={compra.error} resultado={compra.resultado} />
       </div>
     ) : compra.paso === 'confirmada' ? (

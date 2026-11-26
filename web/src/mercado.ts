@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, ErrorApi } from './api.ts';
+import { api, ErrorApi, type AnuncioComercial } from './api.ts';
 import { acortar } from './formato.ts';
 import { ErrorWallet, useWallet } from './wallet.tsx';
 
@@ -10,6 +10,44 @@ export interface InfoToken {
   contrato: string;
   simbolo: string;
   decimales: number;
+}
+
+export interface ConfigComercial {
+  version: number;
+  destinatario_plataforma: string;
+  comision_bps: number;
+  comision_minima: string;
+  reintegro_bps: number;
+  reintegro_maximo: string;
+  plazo_entrega_seg: string;
+}
+
+export interface VentaComercial {
+  orden_id: string | null;
+  comprador_reservado: string | null;
+  vence_publicacion: string | null;
+  condiciones_hash: string | null;
+  comision: string;
+  reintegro: string;
+  total: string;
+  destinatario_plataforma: string | null;
+  vence_entrega: string | null;
+  recepcion: { fecha: string; evidencia_hash: string; acreditador: string } | null;
+  incidencia: { motivo: string; fecha: string } | null;
+  devolucion_hash: string | null;
+}
+
+export interface LiquidacionComercial {
+  orden_id: string | null;
+  precio: string;
+  comision: string;
+  reintegro: string;
+  total: string;
+  vendedor: string;
+  comprador: string;
+  fecha: string;
+  reembolsada?: boolean;
+  [campo: string]: unknown;
 }
 
 export type InfoMercado =
@@ -23,6 +61,7 @@ export type InfoMercado =
       tolerancia_bps: number;
       /** Tras la compra, si el comprador no confirma ni hay disputa en este plazo, el vendedor puede cobrar. */
       plazo_garantia_seg: number;
+      comercio?: ConfigComercial | null;
     };
 
 export interface Venta {
@@ -75,6 +114,8 @@ export interface EstadoComercial {
   pureza_bps: number;
   venta: Venta | null;
   contra_analisis: ContraAnalisisEnCadena | null;
+  venta_comercial?: VentaComercial | null;
+  liquidacion?: LiquidacionComercial | null;
   tipo_mineral?: string | null;
   origen?: string | null;
   peso_kg?: string | null;
@@ -161,47 +202,58 @@ export function useInfoMercado(): InfoMercado | null {
   return info;
 }
 
-/**
- * Nombres conocidos de las cuentas vendedoras de la demo poblada con `npm run demo:poblar`
- * (ver server/scripts/poblar-demo.ts). Un vendedor real sin nombre conocido se muestra con su
- * dirección abreviada: el mercado siempre agrupa por la cuenta dueña del lote en el contrato,
- * nunca por el laboratorio (que solo certifica el análisis, no vende el lote).
- */
-const NOMBRE_VENDEDOR_CONOCIDO: Record<string, string> = {
+/** Nombres de ejemplos sintéticos del poblado histórico; no acreditan identidad comercial. */
+const NOMBRE_VENDEDOR_DEMO: Record<string, string> = {
   GAVLAJBO5WY3HLN3RP625XYV6XPD4KTUB67YUUJINWZUT5I577UYBXI6: 'Cooperativa Minera Huanuni',
   GA35TV5YYQB3OK337EI4CZO3SSMSY46MCCGSJONGSJQEYQXYX66XC22Z: 'Consorcio de Cooperativas de Potosí',
   GCZ3ANLXJB7VCGQXXZCFBRTPYWBPVOIB2ZSFAXK6ZVJT4GPUDLVZQWIC: 'Cooperativas Auríferas del Norte de La Paz',
   GAXG6GXZSXPKTLBFS6TYUV4YWQMACTK5525GJZKZTBW76IXWJ4V7JUXI: 'Cooperativa Aurífera San Simón (Beni)',
   GB4NXHV3V5OY7EJXJQP5YWLSERN7VOUJJM2ZSOLFVJT4KP3SYRJ5KAKJ: 'Cooperativa Minera Colquiri',
   GCLOFJ2GSUVKBR6EHSKBG4OSTOWF72JFZ5DQ4BFB2NJXL4X3CYDGQ5LD: 'Minera Chojlla',
+  GBJZFZ52JRTIPAHXCXQPQ4OJKMVKOIGJDGOOYDPRQYEUZKBO3FQJPSSL: 'Vendedor comercial',
 };
 
-/** Un vendedor (la cuenta dueña del lote) con sus lotes en venta: la "tienda" dentro del mercado. */
+/** Cuenta vendedora con los lotes que ofrece en el contrato; el laboratorio solo firma el análisis. */
 export interface Vendedor {
   id: string;
   nombre: string;
+  es_demo: boolean;
+  publicaciones: number;
   lotes: EstadoComercial[];
   minerales: string[];
   laboratorios: string[];
 }
 
-/** Agrupa los lotes en venta por la cuenta vendedora (el dueño del lote en el contrato). */
-export function agruparPorVendedor(lotes: EstadoComercial[]): Vendedor[] {
+export function agruparPorVendedor(lotes: EstadoComercial[], anuncios: AnuncioComercial[] = []): Vendedor[] {
   const porId = new Map<string, Vendedor>();
+  const obtener = (id: string) => {
+    const nombreDemo = NOMBRE_VENDEDOR_DEMO[id];
+    return porId.get(id) ?? {
+      id, nombre: nombreDemo ? `${nombreDemo} (demo)` : acortar(id, 6), es_demo: !!nombreDemo,
+      publicaciones: 0, lotes: [], minerales: [], laboratorios: [],
+    };
+  };
   for (const lote of lotes) {
     const id = lote.venta?.vendedor ?? lote.dueno;
-    const nombre = NOMBRE_VENDEDOR_CONOCIDO[id] ?? acortar(id, 6);
-    const vendedor = porId.get(id) ?? { id, nombre, lotes: [], minerales: [], laboratorios: [] };
+    const vendedor = obtener(id);
     vendedor.lotes.push(lote);
     if (lote.tipo_mineral && !vendedor.minerales.includes(lote.tipo_mineral)) vendedor.minerales.push(lote.tipo_mineral);
-    const lab = lote.laboratorio?.nombre;
-    if (lab && !vendedor.laboratorios.includes(lab)) vendedor.laboratorios.push(lab);
+    const laboratorio = lote.laboratorio?.nombre;
+    if (laboratorio && !vendedor.laboratorios.includes(laboratorio)) vendedor.laboratorios.push(laboratorio);
     porId.set(id, vendedor);
   }
-  return [...porId.values()].sort((a, b) => b.lotes.length - a.lotes.length);
+  for (const anuncio of anuncios) {
+    if (anuncio.tipo !== 'venta' || !anuncio.vigente) continue;
+    const vendedor = obtener(anuncio.cuenta);
+    vendedor.publicaciones++;
+    if (anuncio.perfil) vendedor.nombre = anuncio.perfil.organizacion || anuncio.perfil.nombre;
+    if (!vendedor.minerales.includes(anuncio.mineral)) vendedor.minerales.push(anuncio.mineral);
+    porId.set(anuncio.cuenta, vendedor);
+  }
+  return [...porId.values()].sort((a, b) => (b.publicaciones + b.lotes.length) - (a.publicaciones + a.lotes.length));
 }
 
-/** Lee los lotes en venta del contrato (se puede forzar una relectura cambiando `recarga`). */
+/** Lectura del catálogo del contrato, con actualización manual y cancelación al cambiar de vista. */
 export function useLotesMercado(habilitado: boolean | undefined, recarga = 0) {
   const [lotes, setLotes] = useState<EstadoComercial[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -235,6 +287,7 @@ export function useFirmaConWallet() {
   const wallet = useWallet();
   const [paso, setPaso] = useState<PasoTransaccion>('inactivo');
   const [error, setError] = useState<string | null>(null);
+  const [estadoError, setEstadoError] = useState<number | null>(null);
   const [resultado, setResultado] = useState<ResultadoTransaccion | null>(null);
 
   const ejecutar = async <P extends { xdr?: string }>(
@@ -242,6 +295,7 @@ export function useFirmaConWallet() {
     enviar: (xdrFirmado: string, cuenta: string, preparado: P) => Promise<ResultadoTransaccion>,
   ): Promise<ResultadoTransaccion | null> => {
     setError(null);
+    setEstadoError(null);
     setResultado(null);
     try {
       if (!wallet.direccion) throw new ErrorWallet('Conecte su wallet Freighter para continuar.');
@@ -263,6 +317,7 @@ export function useFirmaConWallet() {
       setPaso('confirmada');
       return r;
     } catch (e) {
+      setEstadoError(e instanceof ErrorApi ? e.estado : null);
       setError(e instanceof ErrorApi || e instanceof ErrorWallet ? e.message : 'Error inesperado al procesar la transacción');
       setPaso('error');
       return null;
@@ -272,19 +327,57 @@ export function useFirmaConWallet() {
   const reiniciar = () => {
     setPaso('inactivo');
     setError(null);
+    setEstadoError(null);
     setResultado(null);
   };
 
-  return { paso, error, resultado, ejecutar, reiniciar, ocupado: paso === 'preparando' || paso === 'firmando' || paso === 'enviando' };
+  return { paso, error, estadoError, resultado, ejecutar, reiniciar, ocupado: paso === 'preparando' || paso === 'firmando' || paso === 'enviando' };
 }
 
 /** Acción del marketplace firmada por la wallet del vendedor o del comprador. */
 export function useTransaccion() {
   const firma = useFirmaConWallet();
-  const ejecutar = (accion: AccionMercado, loteId: string, precio?: string) =>
+  const ejecutar = (accion: AccionMercado, loteId: string, precio?: string,
+    esperado?: { total_esperado: string; analisis_id_esperado: string; version_esperada: number; orden_id?: string }) =>
     firma.ejecutar(
-      (cuenta) => api<{ xdr: string }>('/mercado/transacciones', { json: { accion, cuenta, lote_id: loteId, precio } }),
-      (xdr, cuenta) => api<ResultadoTransaccion>('/mercado/transacciones/enviar', { json: { accion, cuenta, xdr } }),
+      (cuenta) => api<{ xdr: string; preparacion_id: string }>('/mercado/transacciones', { json: { accion, cuenta, lote_id: loteId, precio, ...esperado } }),
+      (xdr, cuenta, preparada) => api<ResultadoTransaccion>('/mercado/transacciones/enviar', { json: { accion, cuenta, xdr, preparacion_id: preparada.preparacion_id } }),
     );
+  return { ...firma, ejecutar };
+}
+
+export type AccionComercial = 'reservar_venta' | 'buy' | 'registrar_recepcion' | 'atestiguar_entrega' |
+  'abrir_incidencia' | 'cancelar_compra' | 'confirm' | 'claim' | 'refund' | 'cancelar_venta' |
+  'registrar_gasto_ensayo' | 'registrar_devolucion' | 'resolver_incidencia';
+
+export interface DatosTransaccionComercial {
+  accion: AccionComercial;
+  lote_id: string;
+  orden_id?: string;
+  evidencia_hash?: string;
+  evidencia_id?: string;
+  motivo?: string;
+  costo?: string;
+  comprobante_hash?: string;
+  reembolsar?: boolean;
+  total_esperado?: string;
+  analisis_id_esperado?: string;
+  version_esperada?: number;
+}
+
+/** La orden se comprueba en el servidor; la wallet firma y la red decide el resultado. */
+export function useTransaccionComercial() {
+  const firma = useFirmaConWallet();
+  const solicitar = async <T,>(ruta: string, json: unknown): Promise<T> => {
+    try { return await api<T>(ruta, { json, notificarSesion: false }); }
+    catch (error) {
+      if (error instanceof ErrorApi && error.estado === 401) window.dispatchEvent(new Event('sesion-comercial-vencida'));
+      throw error;
+    }
+  };
+  const ejecutar = (datos: DatosTransaccionComercial) => firma.ejecutar(
+    (cuenta) => solicitar<{ xdr: string; preparacion_id: string }>('/mercado/comercial/preparar', { ...datos, cuenta }),
+    (xdr, cuenta, preparado) => solicitar<ResultadoTransaccion>('/mercado/comercial/enviar', { ...datos, cuenta, xdr, preparacion_id: preparado.preparacion_id }),
+  );
   return { ...firma, ejecutar };
 }

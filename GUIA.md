@@ -6,6 +6,103 @@ una wallet, cómo ver las transacciones en Stellar testnet, el contrato, y guion
 > El diseño original está en [MinerTrace.md](MinerTrace.md), la instalación en [README.md](README.md) y la explicación
 > técnica de la capa blockchain en [TECNICO.md](TECNICO.md).
 
+## Comercio v2: recorrido recomendado para la demo
+
+Esta sección corresponde a la interfaz comercial actual. Las direcciones, capturas de estados y lotes de las
+secciones siguientes describen datos históricos de demostración: no prueban producción minera ni validación de campo.
+
+1. Abra **Comprar y vender** (`/comercio`). Puede explorar sin cuenta y preparar una publicación en dos pasos.
+2. Conecte Freighter en Testnet. Una firma de acceso inicia la sesión comercial; no autoriza pagos.
+3. Complete su perfil y publique una compra o una venta. Una venta debe corresponder al lote completo de su wallet.
+4. La otra parte envía una propuesta. Compare precio, ensayo, traslado y una oferta externa neta real, si dispone de ella.
+   Puede aceptar, rechazar o responder con otro precio. Aceptar crea un acuerdo; todavía no mueve dinero.
+5. Antes de reservar, el laboratorio puede acreditar el costo del ensayo desde **Entregas y ensayos** (`/laboratorio/comercio`).
+   La referencia de comprobante no se puede reutilizar para cobrar varias ayudas.
+6. El vendedor confirma la reserva del lote en **Mis operaciones**. Se fijan comprador, precio, análisis, condiciones y tarifas.
+7. El comprador revisa el total y firma el pago. El contrato comprueba la orden, el total y la versión del análisis esperados.
+8. Documenten la entrega. El comprador registra la recepción, o el laboratorio certificador atestigua una entrega comprobada.
+   **En ese momento empieza la inspección.** El comprador puede confirmar antes de que termine.
+9. Al confirmar se distribuyen los fondos. Vencida la inspección, el vendedor puede cobrar si hay recepción y no hay disputa.
+   Una reserva cancelada queda en el historial y permite negociar una nueva operación.
+
+### Importes de la versión comercial
+
+- Vendedor: comisión **0 %**. Comprador: **1 %**, redondeado hacia arriba en unidades mínimas del token.
+- El despliegue configura un mínimo de **20 unidades del token de pago**, no 20 bolivianos implícitos.
+- Ayuda al ensayo: hasta **0,25 % del precio**, limitada por el gasto acreditado por el laboratorio,
+  un máximo de **100 unidades del token** y la comisión disponible. Se paga una vez por lote, al liquidar.
+- En una venta de **10.000 tokens**, con ensayo acreditado de **100 tokens**, el comprador deposita **10.100**;
+  al completar, el vendedor recibe **10.025** y la plataforma **75**. Después de su ensayo, el vendedor conserva **9.925**,
+  antes de otros gastos y obligaciones. Son importes de ejemplo, no una promesa de ganancia frente a otra oferta.
+- El resumen financiero solo cuenta liquidaciones confirmadas por el contrato. La ayuda ya está incluida en el ingreso del vendedor.
+- Ensayo, traslado, obligaciones y costos de conversión externos no se pagan automáticamente por aparecer en el desglose.
+
+### Entrega, incidencias y devolución
+
+El plazo de entrega comienza al financiar; por defecto es de 24 horas. El de inspección comienza al acreditar recepción;
+por defecto es de 7 días. Los plazos efectivos se muestran antes de firmar.
+
+Sin recepción acreditada el vendedor no puede cobrar por vencimiento. Si vence la entrega sin recepción, contraanálisis
+ni incidencia, el comprador puede cancelar y recuperar precio más comisión. Una incidencia detiene el cobro y se revisa
+desde `/revision`, accesible solo a la wallet administradora real del contrato. Si el material fue recibido, el reembolso
+requiere acreditar su devolución. En una disputa de pureza, el laboratorio certificador puede registrar esa devolución.
+El reembolso no paga comisión a MinerTrace ni ayuda al ensayo.
+
+Los respaldos comerciales conservan referencia, descripción y huella. El original permanece con sus participantes;
+una huella no demuestra por sí sola una extracción, entrega o devolución física. El expediente descargable reúne la
+información disponible y no sustituye los formularios oficiales.
+
+Los borradores se conservan en el navegador sin conexión y se sincronizan por decisión del usuario. La firma, el pago,
+la consulta actual a la red y la publicación requieren conexión. No hay pagos reales ni retiro a bolivianos en este prototipo.
+
+### Arrancar sin alterar datos anteriores
+
+Siga [el arranque comercial aislado del README](README.md#arranque-comercial-aislado): ejecute `npm run dev:comercio`
+para usar el contrato comercial de demostración incluido. Puede indicar otro ID público en `COMERCIO_CONTRATO_ID`.
+El lanzador reutiliza la configuración
+de laboratorios sin mostrar sus claves y utiliza una carpeta PGlite separada por contrato; no modifica `.env`.
+
+### Pitch comercial de tres minutos
+
+La demo comercial cargada el 26 de noviembre de 2026 conserva estos ejemplos sintéticos en la base aislada:
+
+- Anuncio abierto: `/comercio/anuncios/5219b6fa-de56-40f3-8363-6e9c1897107f`.
+- Venta completada: `/operaciones/61eb64f1-c616-468f-9b7d-61543474a6ce` (sesión del vendedor o comprador).
+- [Transacción de liquidación en Testnet](https://stellar.expert/explorer/testnet/tx/7f9712bd216b1b0353a14a24796f14d62dbd13487e9638343a6ea0204f56f07c).
+
+El comando `npm run demo:comercio -- --url http://localhost:3018` vuelve a comprobar y reutilizar esos registros;
+el [README](README.md#datos-de-demostración) explica cómo arrancar el entorno. El texto siguiente incluye esos importes.
+
+**0:00–0:35 · Problema.** «En una compra de mineral, el vendedor quiere una buena oferta y cobrar;
+el comprador necesita saber qué recibe y con qué respaldo. Un informe aislado no conecta el precio,
+las condiciones de entrega y el pago. Si cambian los datos o surge una diferencia, resolverla resulta más difícil».
+
+**0:35–1:10 · Solución.** «MinerTrace conecta el análisis verificable con la comercialización P2P.
+El vendedor publica su lote, recibe propuestas y compara cuánto le queda después del ensayo y el traslado.
+Ambas partes aceptan un acuerdo y el comprador deposita el total en garantía. La recepción inicia la revisión;
+una incidencia detiene el cobro hasta su resolución. Cada paso conserva su respaldo».
+
+**1:10–2:05 · Demostración.** Muestre `/comercio` y luego la operación comercial de demostración.
+«Aquí hay un lote para negociar y una venta sintética ya cerrada en Testnet. El precio fue de 2.000 XLM
+de prueba. El comprador pagó 2.020: precio más 20 de comisión. El vendedor no paga comisión.
+El laboratorio acreditó un ensayo de 50; la ayuda es de 5, que equivale al 0,25 % del precio.
+El contrato entregó 2.005 al vendedor y 15 a MinerTrace. Después del ensayo, al vendedor le quedan 1.955,
+antes de otros gastos. La pantalla distingue una ayuda estimada de una acreditada y muestra la liquidación
+leída del contrato. El informe y los respaldos acompañan esta operación».
+
+**2:05–2:40 · Negocio y adopción.** «El vendedor obtiene acceso a propuestas, compara su neto y recibe
+una ayuda al ensayo cuando corresponde. El comprador conoce el costo completo y dispone de un proceso de
+recepción, revisión y devolución. El laboratorio conserva su cobro por el servicio y aporta una acreditación
+firmada. MinerTrace recibe la comisión menos la ayuda, únicamente si la venta se completa. Ese ingreso todavía
+debe cubrir operación y soporte: lo mediremos por venta, sin prometer rentabilidad por anticipado».
+
+**2:40–3:00 · Cierre.** «Nos enfocamos en conectar evidencia, negociación y cobro. El prototipo ya ejecuta
+este recorrido en Testnet. El siguiente paso es validarlo con vendedores, compradores y laboratorios de una zona,
+comprobar los respaldos del origen y medir adopción, tiempo y costo por operación».
+
+Ensaye con cronómetro. Los datos de la demo son sintéticos y los XLM son de Testnet; no los presente como
+compras reales, bolivianos ni evidencia de un piloto de campo.
+
 ## Índice
 
 1. [Qué es MinerTrace](#1-qué-es-minertrace)
@@ -38,8 +135,9 @@ define el precio de un lote, pero suele ser un PDF o un registro que cualquiera 
    actuales y la compara con la del contrato: **íntegro** o **alterado**.
 3. **Venta con garantía.** El dueño publica el lote; el comprador paga y el **contrato retiene el dinero**.
    Un segundo laboratorio puede hacer un **contra-análisis**: si la pureza difiere más que la tolerancia (2 %),
-   el lote entra en **disputa** y el comprador recupera su dinero. Si todo está bien, el comprador confirma y
-   el vendedor cobra. Si el comprador no responde en 7 días, el vendedor puede cobrar.
+   el lote entra en **disputa**. El reembolso requiere acreditar la devolución cuando se recibió el material.
+   Si todo está bien, el comprador confirma y el vendedor cobra. Con recepción acreditada y sin disputa,
+   el vendedor puede cobrar al vencer la inspección.
 
 **Qué garantiza y qué no:** garantiza que el resultado registrado no se alteró después, quién lo registró y
 cuándo. No garantiza que la medición física sea correcta: eso depende del laboratorio y sus acreditaciones.
@@ -53,7 +151,7 @@ Por eso existe el contra-análisis.
 
 | Rol | Quién es en la vida real | Cómo se identifica | Qué hace | Qué **no** puede hacer |
 |---|---|---|---|---|
-| **Administrador** | MinerTrace o una autoridad minera | Wallet `minertrace-admin` (solo por consola) | Autoriza y revoca laboratorios en el contrato | Cambiar análisis, mover el dinero en garantía, comprar ni vender por otros |
+| **Administrador** | Operador responsable de MinerTrace | Wallet administradora del contrato; revisión en `/revision` | Autoriza laboratorios y resuelve incidencias con evidencia y firma | Cambiar análisis sellados o comprar por una cuenta ajena |
 | **Laboratorio certificador** (LAB-001) | Laboratorio acreditado (ISO/IEC 17025) | Usuarios con contraseña + wallet del laboratorio (`lab-a`) | El **analista** registra lotes y análisis; el **supervisor** además corrige; ambos firman con la wallet del laboratorio | Editar o borrar un análisis ya registrado (solo agregar versiones); contra-analizar sus propios lotes |
 | **Laboratorio de contraste** (LAB-002) | Segundo laboratorio independiente | Usuarios con contraseña + wallet `lab-b` | Hace **contra-análisis** de lotes vendidos por otros laboratorios; también puede certificar sus propios lotes | Contra-analizar un lote que no está en garantía, o hacerlo dos veces en la misma venta |
 | **Dueño / vendedor** | Cooperativa minera o productor | Solo su wallet (`vendedor`) | Publica sus lotes con precio; cobra al confirmar el comprador o al vencer la garantía | Comprar su propio lote; cobrar antes del plazo o con el lote en disputa; publicar un lote en disputa |
@@ -156,8 +254,8 @@ Nadie, ni MinerTrace ni el administrador, puede sacar el dinero del contrato por
 | El laboratorio quiere "editar" un resultado ya registrado | El contrato no permite sobrescribir versiones | Solo puede publicar una corrección, que queda visible en el historial |
 | Un laboratorio no autorizado (o revocado) registra análisis | `require_auth` + lista de laboratorios del contrato | El contrato lo rechaza; los análisis de un laboratorio revocado dejan de valer para vender |
 | El laboratorio midió mal (o mintió) desde el inicio | El contra-análisis de otro laboratorio | **En disputa**: el comprador recupera su dinero |
-| El vendedor quiere cobrar sin entregar | El dinero está en el contrato | Solo cobra cuando el comprador confirma, o a los 7 días si no hubo disputa |
-| El comprador recibe y no confirma nunca | Plazo de garantía | A los 7 días el vendedor cobra con `claim` |
+| El vendedor quiere cobrar sin entregar | Recepción acreditada y dinero retenido | Sin recepción no puede cobrar por vencimiento |
+| El comprador recibe y no confirma nunca | Inspección desde recepción acreditada | Vencido el plazo sin disputa, el vendedor cobra con `claim` |
 | Alguien quiere firmar en nombre de otro | Cada operación exige la firma de la wallet correspondiente | La transacción no se acepta |
 
 ---
@@ -224,26 +322,25 @@ Contraseña de todos: **`minertrace123`**
 
 | Cuenta | Para qué | Dirección pública |
 |---|---|---|
-| `minertrace-lab-a` | Firma los análisis de **LAB-001** | (la imprime `npm run contrato:desplegar`) |
-| `minertrace-lab-b` | Firma los análisis y contra-análisis de **LAB-002** | (la imprime `npm run contrato:desplegar`) |
-| `minertrace-vendedor-huanuni` | **Vendedor**: Cooperativa Minera Huanuni | (ídem) |
-| `minertrace-vendedor-potosi` | **Vendedor**: Consorcio de Cooperativas de Potosí | (ídem) |
-| `minertrace-vendedor-tipuani` | **Vendedor**: Cooperativas Auríferas del Norte de La Paz | (ídem) |
-| `minertrace-vendedor-sansimon` | **Vendedor**: Cooperativa Aurífera San Simón (Beni) | (ídem) |
-| `minertrace-vendedor-colquiri` | **Vendedor**: Cooperativa Minera Colquiri | (ídem) |
-| `minertrace-vendedor-chojlla` | **Vendedor**: Minera Chojlla | (ídem) |
-| `minertrace-comprador` | **Comprador** (~18 500 XLM de prueba) | (ídem) |
-| `minertrace-admin` | Administrador del contrato (autoriza laboratorios; solo por consola) | (ídem) |
-
-Las direcciones cambian en cada despliegue nuevo: use las que imprime `npm run contrato:desplegar`, no las fije
-de memoria. Hay 6 vendedores (uno por cooperativa) para poder elegir entre varios en `/mercado`, en vez de uno solo.
+| `minertrace-lab-a` | Firma los análisis de **LAB-001** | `GCPCQ6JVHRMUZ7QPVDCK2AW3DRKU3WOXIPIUO72PKS2BA6W2M4UZHQWF` |
+| `minertrace-lab-b` | Firma los análisis y contra-análisis de **LAB-002** | `GA4T7QXPQEMLTMR2GRSK327HKIY5QKAIXSQQBW4HH5J762Y422YO4VMU` |
+| `minertrace-vendedor` | **Dueño/vendedor** de todos los lotes de la demo | `GBJZFZ52JRTIPAHXCXQPQ4OJKMVKOIGJDGOOYDPRQYEUZKBO3FQJPSSL` |
+| `minertrace-comprador` | **Comprador** (~18 500 XLM de prueba) | `GDRILNQTFSNQA3HXC2BWSGVCPIJ3URVOXHKKRNM6P6IK7EJPRQYXTD5R` |
+| `minertrace-admin` | Administrador del contrato (autoriza laboratorios; solo por consola) | `GD5C42D6F23JAKEULOZMDSDBHPPPFSCVVNODMTGMGCJDYD7UE64ZBVOM` |
 
 Las **claves secretas** están solo en tu computadora (Stellar CLI). Para verlas e importarlas en Freighter:
+
+El despliegue integrado también prepara seis vendedores de demostración para el directorio:
+`minertrace-vendedor-huanuni`, `minertrace-vendedor-potosi`, `minertrace-vendedor-tipuani`,
+`minertrace-vendedor-sansimon`, `minertrace-vendedor-colquiri` y `minertrace-vendedor-chojlla`.
+Sus nombres de cooperativas son ejemplos, sin identidad verificada. `demo:poblar` distribuye los lotes
+históricos entre esas wallets; `demo:comercio` conserva `minertrace-vendedor` para el ejemplo comercial v2.
+Las direcciones públicas se consultan con `stellar keys public-key <nombre>`.
 
 ```bash
 stellar keys secret minertrace-lab-a
 stellar keys secret minertrace-lab-b
-stellar keys secret minertrace-vendedor-potosi   # o -huanuni, -tipuani, -sansimon, -colquiri, -chojlla
+stellar keys secret minertrace-vendedor
 stellar keys secret minertrace-comprador
 ```
 
@@ -261,9 +358,8 @@ la cuenta `lab-a`; la app avisa si conectas otra.
    y crea una wallet con una contraseña local (o desbloquea la existente).
 2. **Cambia la red a Testnet**: en Freighter, abre el selector de red (arriba) y elige **Testnet**.
 3. **Importa las cuentas de la demo**: en el menú de cuentas, elige la opción de **importar una clave secreta**
-   y pega la clave que da `stellar keys secret minertrace-comprador`. Repite con `lab-a`, `lab-b` y al menos un
-   vendedor (por ejemplo `minertrace-vendedor-potosi`; importe los otros cinco si quiere mostrar varios vendedores).
-   Ponles nombre (Comprador, Lab A, Lab B, Vendedor Potosí…) para cambiar entre ellas con facilidad.
+   y pega la clave que da `stellar keys secret minertrace-comprador`. Repite con `vendedor`, `lab-a` y `lab-b`.
+   Ponles nombre (Comprador, Vendedor, Lab A, Lab B) para cambiar entre ellas con facilidad.
 4. En la app, pulsa **Conectar wallet** (arriba a la derecha) y acepta en Freighter.
 5. ✅ El botón muestra tu dirección abreviada. Si aparece **"Red incorrecta"** en rojo, Freighter no está en Testnet.
 6. Para actuar como otro rol, **cambia de cuenta en Freighter**: la app lo detecta sola en unos segundos.

@@ -14,6 +14,8 @@ import { rutasDemo } from './rutas/demo.ts';
 import { rutasLaboratorio } from './rutas/laboratorio.ts';
 import { rutasMercado } from './rutas/mercado.ts';
 import { rutasPublicas } from './rutas/publico.ts';
+import { rutasComercio } from './rutas/comercio.ts';
+import { rutasRevisionComercial } from './rutas/revisionComercial.ts';
 import { FondosInsuficientes, TransaccionRechazada } from './stellar/contrato.ts';
 import { ErrorValidacion } from './validacion.ts';
 
@@ -28,6 +30,8 @@ export function crearApp(ctx: Contexto) {
 
   app.use('/api/publico', rutasPublicas(ctx));
   app.use('/api/mercado', rutasMercado(ctx));
+  app.use('/api/comercio/revision', rutasRevisionComercial(ctx));
+  app.use('/api/comercio', rutasComercio(ctx));
   app.use('/api/contra-analisis', rutasContraAnalisis(ctx));
   if (config.demoAlterar) app.use('/api/demo', rutasDemo(ctx));
   app.use('/api', rutasLaboratorio(ctx));

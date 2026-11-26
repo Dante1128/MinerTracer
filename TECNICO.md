@@ -4,6 +4,37 @@ Explicación técnica de la capa blockchain de MinerTrace: la red Stellar, el co
 el algoritmo de huella (hashing), las firmas, el ciclo de una transacción y el modelo de seguridad.
 La guía de uso está en [GUIA.md](GUIA.md) y el diseño original en [MinerTrace.md](MinerTrace.md).
 
+## Cambios efectivos del comercio v2
+
+El registro canónico v1 de los análisis se conserva sin cambios. Los acuerdos, gastos, evidencias y liquidaciones
+comerciales se vinculan mediante identificadores y registros propios. El contrato debe desplegarse nuevamente:
+no tiene actualización in situ. `npm run dev:comercio` permite usar el ID nuevo con una base separada sin modificar `.env`.
+
+- **Identidad comercial:** desafío de un uso, vinculado al navegador y al origen, con caducidad de cinco minutos;
+  firma de mensaje SEP-53 y sesión HttpOnly de doce horas. La firma de acceso no autoriza transferencias.
+- **Negociación:** perfiles, anuncios, ofertas y contraofertas; aceptación atómica y órdenes inmutables con precio,
+  token, tarifas, plazos, participantes y hash de condiciones. Los campos de contacto no se publican en el catálogo.
+- **Reserva:** `reservar_venta` fija comprador, orden, precio y condiciones en el contrato.
+  `financiar_orden` exige el ID de orden, total, análisis y versión esperados antes de transferir.
+- **Firma de transacciones:** la preparación se asocia a cuenta, acción, lote y hash del cuerpo completo de la transacción.
+  El cliente puede añadir firmas al sobre, pero no cambiar precio, función, fuente, comisión o plazos. Los envíos tienen
+  caducidad e idempotencia. El servidor no firma por compradores, vendedores ni laboratorios del portal.
+- **Política:** comisión comprador de 100 puntos básicos, mínimo de despliegue de 20 tokens; ayuda de 25 puntos básicos,
+  limitada al gasto acreditado, máximo de despliegue de 100 tokens y comisión disponible. Todos los cálculos usan enteros
+  y unidades mínimas del token. Comisión: techo; porcentaje de ayuda: piso.
+- **Gasto:** el laboratorio certificador firma `registrar_gasto_ensayo`; un comprobante no se reutiliza, y la ayuda se paga
+  una sola vez por lote. El comprador deposita precio + comisión; al cerrar, vendedor = precio + ayuda y plataforma = comisión − ayuda.
+- **Relojes:** `buy`/`financiar_orden` fija el límite de entrega. `registrar_recepcion` o `atestiguar_entrega` inicia inspección.
+  `claim` requiere recepción, vencimiento y ausencia de disputa; `confirm` acepta el material y liquida.
+- **Incidencias:** falta de entrega, resolución administrativa firmada y constancia de devolución cuando corresponde.
+  Un reembolso devuelve precio + comisión, sin pagar ayuda ni ingresos a la plataforma.
+- **Historial:** `get_historial_liquidaciones` conserva importes, participantes, resultado y snapshot comercial por orden.
+  `get_orden_cancelada` conserva el cierre de reservas antes de financiación, aun si se vuelve a publicar el lote.
+  El resumen financiero suma esas liquidaciones; los eventos indexados alimentan la cronología.
+
+Las secciones siguientes detallan la arquitectura original. Para las reglas comerciales y sus plazos actuales prevalece
+esta sección y la [guía comercial v2](GUIA.md#comercio-v2-recorrido-recomendado-para-la-demo).
+
 ## Índice
 
 1. [Resumen técnico](#1-resumen-técnico)
@@ -30,7 +61,7 @@ La guía de uso está en [GUIA.md](GUIA.md) y el diseño original en [MinerTrace
 |---|---|
 | Blockchain | **Stellar** (capa 1, pública), red **testnet**, protocolo 29 |
 | Contratos inteligentes | **Soroban**, la plataforma de contratos de Stellar (WebAssembly) |
-| Lenguaje del contrato | **Rust** con `soroban-sdk` 28.0.0, compilado a **WebAssembly** (`wasm32v1-none`, ~21 KB) |
+| Lenguaje del contrato | **Rust** con `soroban-sdk` 28.0.0, compilado a **WebAssembly** (`wasm32v1-none`) |
 | Tipo de contrato | Contrato con estado propio que combina un **registro notarial versionado** (attestation registry con cadena de hashes) y un **escrow** (custodia condicional de pagos) sobre la interfaz estándar de tokens |
 | Huella | **SHA-256** sobre JSON canónico **RFC 8785 (JCS)**, con salt de 128 bits y el SHA-256 del PDF incluido |
 | Firmas | **Ed25519** (cuentas Stellar `G…`); autorización con el marco de Soroban (`require_auth`) |
@@ -145,7 +176,7 @@ Se configura en el mismo despliegue con un **constructor** (`__constructor`, CAP
 | `admin` | `GD5C42D6F23JAKEULOZMDSDBHPPPFSCVVNODMTGMGCJDYD7UE64ZBVOM` | Autoriza y revoca laboratorios |
 | `token` | `CDLZFC3S…` (XLM nativo) | Moneda de pago |
 | `tolerancia_bps` | `200` (2,00 %) | Diferencia máxima aceptada en un contra-análisis |
-| `plazo_garantia_seg` | `604800` (7 días) | Tras la compra, plazo para que el vendedor pueda cobrar sin confirmación |
+| `plazo_garantia_seg` | `604800` (7 días) | Desde recepción acreditada, inspección antes del cobro por vencimiento |
 
 ### 4.3 Datos que guarda
 

@@ -171,6 +171,28 @@ function destinoDeInvocacion(tx: Transaction): { contrato: string; funcion: stri
   return { contrato: StrKey.encodeContract(Buffer.from(id)), funcion: Buffer.from(nombre).toString('utf8') };
 }
 
+/** Fija el cuerpo completo (incluidas tarifas y plazos); Freighter solo añade firmas al sobre. */
+export function huellaInvocacion(xdr: string): string {
+  try {
+    const tx = TransactionBuilder.fromXDR(xdr, PASSPHRASE);
+    if (!('source' in tx) || tx.operations.length !== 1) throw new Error('Operación inválida');
+    const operacion = tx.operations[0];
+    if (operacion.type !== 'invokeHostFunction' || operacion.func.type !== 'hostFunctionTypeInvokeContract') {
+      throw new Error('Invocación inválida');
+    }
+    return Buffer.from(tx.hash()).toString('hex');
+  } catch {
+    throw new TransaccionRechazada('La transacción debe contener una sola operación de MinerTrace');
+  }
+}
+
+export function funcionInvocada(xdr: string): string | null {
+  try {
+    const tx = TransactionBuilder.fromXDR(xdr, PASSPHRASE);
+    return 'source' in tx ? destinoDeInvocacion(tx)?.funcion ?? null : null;
+  } catch { return null; }
+}
+
 function mensajeEnvio(codigo: string): string {
   if (/insufficientBalance|insufficientFee/i.test(codigo)) return 'La cuenta no tiene XLM suficiente para pagar la comisión';
   if (/badSeq/i.test(codigo)) return 'La transacción quedó desactualizada; inténtelo de nuevo';
