@@ -1,11 +1,12 @@
 /**
  * Prueba de integración del marketplace contra el contrato en testnet:
- * publicar → comprar → contra-análisis fuera de tolerancia → reembolso.
+ * publicar → comprar → contra-análisis fuera de tolerancia → devolución acreditada → reembolso íntegro.
  * Las wallets del vendedor y del comprador son cuentas nuevas fondeadas con
  * friendbot; firman aquí lo que en el navegador firmaría Freighter.
  * Requiere las mismas variables que anclaje.testnet.test.ts.
  */
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -80,7 +81,10 @@ test('publicar, comprar, contra-análisis en disputa y reembolso en testnet', { 
 
     // Lo que hace el navegador: pedir la transacción, firmarla con la wallet y enviarla.
     const firmarYEnviar = async (accion: Accion, par: Keypair, precio?: string) => {
-      const xdr = await mercado.prepararTransaccion(accion, par.publicKey(), loteId, precio);
+      const estado = accion === 'buy' ? await mercado.estadoLote(loteId) : null;
+      const esperado = estado?.venta ? { total: estado.venta_comercial?.total ?? estado.venta.precio,
+        analisis_id: estado.venta.analisis_id, version: estado.venta.version, orden_id: estado.venta_comercial?.orden_id ?? undefined } : undefined;
+      const xdr = await mercado.prepararTransaccion(accion, par.publicKey(), loteId, precio, esperado);
       const tx = TransactionBuilder.fromXDR(xdr, PASSPHRASE);
       tx.sign(par);
       return mercado.enviarTransaccion(accion, par.publicKey(), tx.toXDR());
@@ -95,6 +99,9 @@ test('publicar, comprar, contra-análisis en disputa y reembolso en testnet', { 
     let estado = await mercado.estadoLote(loteId);
     assert.equal(estado?.estado, 'EnGarantia');
     assert.equal(estado?.venta?.comprador, comprador.publicKey());
+    assert.equal(estado?.venta?.vence_garantia, null, 'la inspección no empieza hasta acreditar recepción');
+    const comercial = await mercado.ventaComercial(loteId);
+    assert.ok(comercial?.vence_entrega, 'la compra fija el plazo de entrega');
 
     // Contra-análisis del laboratorio B: 72.00 % frente a 75.00 % (tolerancia 2.00 %).
     await registrarContraAnalisis(
@@ -109,11 +116,25 @@ test('publicar, comprar, contra-análisis en disputa y reembolso en testnet', { 
     assert.equal(estado?.contra_analisis?.diferencia_bps, 300);
 
     await assert.rejects(firmarYEnviar('confirm', comprador), (e) => e instanceof ErrorContrato && e.codigo === 21);
+    await assert.rejects(firmarYEnviar('refund', comprador), (e) => e instanceof ErrorContrato && e.codigo === 41);
+    // Acta sintética para la integración: la firma del laboratorio acredita la restitución física.
+    const labA = Keypair.fromSecret(config.stellar.secretos['LAB-001']);
+    const evidenciaDevolucion = createHash('sha256').update(`Devolución simulada de integración: ${loteId}`).digest();
+    const devolucion = TransactionBuilder.fromXDR(await mercado.contrato.prepararTransaccion('registrar_devolucion', {
+      lab: labA.publicKey(), lote_id: loteId, evidencia_hash: evidenciaDevolucion,
+    }, labA.publicKey()), PASSPHRASE);
+    devolucion.sign(labA);
+    await mercado.contrato.enviarFirmada(devolucion.toXDR(), { funcion: 'registrar_devolucion', cuenta: labA.publicKey() });
     await firmarYEnviar('refund', comprador);
     estado = await mercado.estadoLote(loteId);
     assert.equal(estado?.estado, 'EnDisputa');
     assert.equal(estado?.venta, null);
     assert.equal(estado?.dueno, vendedor.publicKey());
+    const liquidacion = await mercado.liquidacion(loteId);
+    assert.equal(liquidacion?.reembolsada, true);
+    assert.equal(liquidacion?.devuelto_comprador, comercial.total, 'se devuelve también la comisión retenida');
+    assert.equal(liquidacion?.recibido_vendedor, '0');
+    assert.equal(liquidacion?.recibido_plataforma, '0');
 
     const tipos = (await mercado.cronologia(loteId)).map((e) => e.tipo);
     assert.deepEqual(tipos, [
@@ -121,6 +142,8 @@ test('publicar, comprar, contra-análisis en disputa y reembolso en testnet', { 
       'lote_publicado',
       'lote_comprado',
       'contra_analisis_registrado',
+      'devolucion_registrada',
+      ...(BigInt(comercial.comision) > 0n ? ['venta_liquidada'] : []),
       'reembolsado',
     ]);
   } finally {

@@ -4,6 +4,7 @@
  * Requiere las mismas variables que anclaje.testnet.test.ts.
  */
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -109,7 +110,10 @@ test('análisis y contra-análisis firmados con la wallet del laboratorio, y rec
 
     // 4. Venta y contra-análisis del laboratorio B firmado con su wallet.
     for (const [accion, par] of [['list_batch', vendedor], ['buy', comprador]] as const) {
-      const xdr = await mercado.prepararTransaccion(accion, par.publicKey(), loteId, accion === 'list_batch' ? '5' : undefined);
+      const estadoCompra = accion === 'buy' ? await mercado.estadoLote(loteId) : null;
+      const esperado = estadoCompra?.venta ? { total: estadoCompra.venta_comercial?.total ?? estadoCompra.venta.precio,
+        analisis_id: estadoCompra.venta.analisis_id, version: estadoCompra.venta.version, orden_id: estadoCompra.venta_comercial?.orden_id ?? undefined } : undefined;
+      const xdr = await mercado.prepararTransaccion(accion, par.publicKey(), loteId, accion === 'list_batch' ? '5' : undefined, esperado);
       await mercado.enviarTransaccion(accion, par.publicKey(), firmar(xdr, par));
     }
     const analistaB = await usuario('analista@lab002.test');
@@ -126,6 +130,18 @@ test('análisis y contra-análisis firmados con la wallet del laboratorio, y rec
     assert.equal(estado?.contra_analisis?.hash, fila.hash);
     // 74.50 % vendido frente a 74.00 %: dentro de la tolerancia, sigue en garantía.
     assert.equal(estado?.estado, 'EnGarantia');
+    assert.equal(estado?.venta?.vence_garantia, null);
+    // El comprador reconoce la recepción con su wallet y libera el pago una vez revisado el contraste.
+    const recepcion = await mercado.contrato.prepararTransaccion('registrar_recepcion', {
+      comprador: comprador.publicKey(), lote_id: loteId,
+      evidencia_hash: createHash('sha256').update(`Recepción simulada de integración: ${loteId}`).digest(),
+    }, comprador.publicKey());
+    await mercado.contrato.enviarFirmada(firmar(recepcion, comprador), { funcion: 'registrar_recepcion', cuenta: comprador.publicKey() });
+    assert.ok((await mercado.estadoLote(loteId))?.venta?.vence_garantia);
+    await mercado.enviarTransaccion('confirm', comprador.publicKey(), firmar(
+      await mercado.prepararTransaccion('confirm', comprador.publicKey(), loteId), comprador,
+    ));
+    assert.equal((await mercado.estadoLote(loteId))?.estado, 'Vendido');
   } finally {
     await db.cerrar();
   }

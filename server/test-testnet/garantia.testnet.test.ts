@@ -1,10 +1,11 @@
 /**
- * Vencimiento de la garantía contra testnet: si el comprador no confirma ni
- * hay disputa, el vendedor cobra al vencer el plazo. Necesita un contrato
+ * Vencimiento de inspección contra testnet: con entrega acreditada, si el comprador
+ * no confirma ni hay disputa, el vendedor cobra al vencer el plazo. Necesita un contrato
  * desplegado con un plazo corto (PLAZO_GARANTIA_SEG=20 npm run contrato:desplegar);
  * con el plazo normal (días) se omite. Mismas variables que anclaje.testnet.test.ts.
  */
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -82,14 +83,26 @@ test('el vendedor cobra cuando vence la garantía sin confirmación ni disputa',
     await procesador.procesar();
 
     const firmarYEnviar = async (accion: Accion, par: Keypair, precio?: string) => {
-      const tx = TransactionBuilder.fromXDR(await mercado.prepararTransaccion(accion, par.publicKey(), loteId, precio), PASSPHRASE);
+      const estado = accion === 'buy' ? await mercado.estadoLote(loteId) : null;
+      const esperado = estado?.venta ? { total: estado.venta_comercial?.total ?? estado.venta.precio,
+        analisis_id: estado.venta.analisis_id, version: estado.venta.version, orden_id: estado.venta_comercial?.orden_id ?? undefined } : undefined;
+      const tx = TransactionBuilder.fromXDR(await mercado.prepararTransaccion(accion, par.publicKey(), loteId, precio, esperado), PASSPHRASE);
       tx.sign(par);
       return mercado.enviarTransaccion(accion, par.publicKey(), tx.toXDR());
     };
     await firmarYEnviar('list_batch', vendedor, '3');
     await firmarYEnviar('buy', comprador);
+    assert.equal((await mercado.estadoLote(loteId))?.venta?.vence_garantia, null);
+    await assert.rejects(firmarYEnviar('claim', vendedor), (e) => e instanceof ErrorContrato && e.codigo === 38);
+    const labA = Keypair.fromSecret(config.stellar.secretos['LAB-001']);
+    const entrega = TransactionBuilder.fromXDR(await mercado.contrato.prepararTransaccion('atestiguar_entrega', {
+      lab: labA.publicKey(), lote_id: loteId,
+      evidencia_hash: createHash('sha256').update(`Entrega simulada de integración: ${loteId}`).digest(),
+    }, labA.publicKey()), PASSPHRASE);
+    entrega.sign(labA);
+    await mercado.contrato.enviarFirmada(entrega.toXDR(), { funcion: 'atestiguar_entrega', cuenta: labA.publicKey() });
     const venta = (await mercado.estadoLote(loteId))?.venta;
-    assert.ok(venta?.vence_garantia, 'la compra fija el vencimiento');
+    assert.ok(venta?.vence_garantia, 'la entrega acreditada fija el vencimiento de inspección');
 
     // Antes del vencimiento, el vendedor no puede cobrar.
     await assert.rejects(firmarYEnviar('claim', vendedor), (e) => e instanceof ErrorContrato && e.codigo === 25);
@@ -108,6 +121,9 @@ test('el vendedor cobra cuando vence la garantía sin confirmación ni disputa',
     assert.equal(estado?.estado, 'Vendido');
     assert.equal(estado?.dueno, comprador.publicKey());
     assert.equal(estado?.venta, null);
+    const liquidacion = await mercado.liquidacion(loteId);
+    assert.equal(liquidacion?.reembolsada, false);
+    assert.equal(liquidacion?.devuelto_comprador, '0');
     const tipos = (await mercado.cronologia(loteId)).map((e) => e.tipo);
     assert.equal(tipos.at(-1), 'pago_reclamado');
     console.log(`  plazo ${plazo} s · lote ${loteId}`);
