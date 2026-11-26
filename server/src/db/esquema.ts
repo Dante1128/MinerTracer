@@ -172,6 +172,127 @@ CREATE TABLE IF NOT EXISTS indice_eventos (
   cursor       TEXT
 );
 
+-- Negociación P2P: los acuerdos no sustituyen el estado de pago del contrato.
+CREATE TABLE IF NOT EXISTS comercio_desafios (
+  id TEXT PRIMARY KEY,
+  cuenta TEXT NOT NULL,
+  mensaje TEXT NOT NULL,
+  vinculo_hash TEXT NOT NULL,
+  vence TIMESTAMPTZ NOT NULL,
+  consumido BOOLEAN NOT NULL DEFAULT false
+);
+CREATE TABLE IF NOT EXISTS comercio_sesiones (
+  hash TEXT PRIMARY KEY,
+  cuenta TEXT NOT NULL,
+  vence TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS comercio_sesiones_vence_idx ON comercio_sesiones(vence);
+CREATE TABLE IF NOT EXISTS comercio_perfiles (
+  cuenta TEXT PRIMARY KEY,
+  nombre TEXT NOT NULL,
+  organizacion TEXT NOT NULL DEFAULT '',
+  tipo TEXT NOT NULL CHECK (tipo IN ('productor','cooperativa','comprador')),
+  zona TEXT NOT NULL,
+  contacto TEXT NOT NULL DEFAULT '',
+  documento_ref TEXT NOT NULL DEFAULT '',
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS comercio_anuncios (
+  id TEXT PRIMARY KEY,
+  cliente_id TEXT NOT NULL,
+  entrada_hash TEXT NOT NULL,
+  cuenta TEXT NOT NULL REFERENCES comercio_perfiles(cuenta),
+  tipo TEXT NOT NULL CHECK (tipo IN ('compra','venta')),
+  mineral TEXT NOT NULL,
+  zona TEXT NOT NULL,
+  cantidad TEXT NOT NULL,
+  precio TEXT NOT NULL,
+  lote_id TEXT REFERENCES lotes(id),
+  condiciones TEXT NOT NULL DEFAULT '',
+  punto_entrega TEXT NOT NULL DEFAULT '',
+  gastos_ensayo TEXT NOT NULL DEFAULT '0',
+  gastos_traslado TEXT NOT NULL DEFAULT '0',
+  oferta_externa_neta TEXT,
+  plazo_pago TEXT NOT NULL DEFAULT '',
+  token JSONB NOT NULL,
+  estado TEXT NOT NULL DEFAULT 'abierto' CHECK (estado IN ('abierto','cerrado','aceptado')),
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
+  vence TIMESTAMPTZ NOT NULL,
+  UNIQUE(cuenta,cliente_id)
+);
+CREATE INDEX IF NOT EXISTS comercio_anuncios_lista_idx ON comercio_anuncios(estado,vence,creado_en);
+CREATE TABLE IF NOT EXISTS comercio_ofertas (
+  id TEXT PRIMARY KEY,
+  cliente_id TEXT NOT NULL,
+  entrada_hash TEXT NOT NULL,
+  anuncio_id TEXT NOT NULL REFERENCES comercio_anuncios(id),
+  cuenta TEXT NOT NULL REFERENCES comercio_perfiles(cuenta),
+  precio TEXT NOT NULL,
+  lote_id TEXT REFERENCES lotes(id),
+  condiciones TEXT NOT NULL DEFAULT '',
+  punto_entrega TEXT NOT NULL DEFAULT '',
+  gastos_ensayo TEXT NOT NULL DEFAULT '0',
+  gastos_traslado TEXT NOT NULL DEFAULT '0',
+  plazo_pago TEXT NOT NULL DEFAULT '',
+  estado TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente','aceptada','rechazada')),
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
+  vence TIMESTAMPTZ NOT NULL,
+  UNIQUE(cuenta,cliente_id)
+);
+CREATE INDEX IF NOT EXISTS comercio_ofertas_anuncio_idx ON comercio_ofertas(anuncio_id,creado_en);
+ALTER TABLE comercio_ofertas ADD COLUMN IF NOT EXISTS proponente TEXT;
+ALTER TABLE comercio_ofertas ADD COLUMN IF NOT EXISTS destinatario TEXT;
+ALTER TABLE comercio_ofertas ADD COLUMN IF NOT EXISTS oferta_anterior_id TEXT REFERENCES comercio_ofertas(id);
+CREATE TABLE IF NOT EXISTS comercio_operaciones (
+  id TEXT PRIMARY KEY,
+  anuncio_id TEXT NOT NULL UNIQUE REFERENCES comercio_anuncios(id),
+  oferta_id TEXT NOT NULL UNIQUE REFERENCES comercio_ofertas(id),
+  lote_id TEXT NOT NULL REFERENCES lotes(id),
+  vendedor TEXT NOT NULL,
+  comprador TEXT NOT NULL,
+  precio TEXT NOT NULL,
+  precio_unidades TEXT NOT NULL,
+  comision_unidades TEXT NOT NULL,
+  condiciones_hash TEXT NOT NULL,
+  condiciones JSONB NOT NULL,
+  token JSONB NOT NULL,
+  politica JSONB NOT NULL,
+  cotizacion JSONB NOT NULL,
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
+  vence TIMESTAMPTZ NOT NULL,
+  CHECK (vendedor <> comprador)
+);
+CREATE INDEX IF NOT EXISTS comercio_operaciones_cuentas_idx ON comercio_operaciones(vendedor,comprador,creado_en);
+CREATE TABLE IF NOT EXISTS comercio_evidencias (
+  id TEXT PRIMARY KEY,
+  cliente_id TEXT NOT NULL,
+  entrada_hash TEXT NOT NULL,
+  operacion_id TEXT NOT NULL REFERENCES comercio_operaciones(id),
+  cuenta TEXT NOT NULL,
+  tipo TEXT NOT NULL CHECK (tipo IN ('origen','entrega','devolucion','ensayo')),
+  referencia TEXT NOT NULL,
+  descripcion TEXT NOT NULL,
+  hash TEXT NOT NULL,
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(cuenta,cliente_id)
+);
+CREATE INDEX IF NOT EXISTS comercio_evidencias_operacion_idx ON comercio_evidencias(operacion_id,creado_en);
+ALTER TABLE comercio_evidencias DROP CONSTRAINT IF EXISTS comercio_evidencias_tipo_check;
+ALTER TABLE comercio_evidencias ADD CONSTRAINT comercio_evidencias_tipo_check
+  CHECK (tipo IN ('origen','entrega','devolucion','ensayo','decision'));
+CREATE TABLE IF NOT EXISTS comercio_transacciones (
+  id TEXT PRIMARY KEY,
+  cuenta TEXT NOT NULL,
+  accion TEXT NOT NULL,
+  lote_id TEXT NOT NULL,
+  orden_id TEXT,
+  invocacion_hash TEXT NOT NULL,
+  vence TIMESTAMPTZ NOT NULL,
+  tx_id TEXT,
+  fecha TEXT,
+  enviando BOOLEAN NOT NULL DEFAULT false
+);
+
 CREATE OR REPLACE FUNCTION mt_solo_insercion() RETURNS trigger AS $$
 BEGIN
   RAISE EXCEPTION 'La tabla % es de solo inserción', TG_TABLE_NAME;
@@ -217,5 +338,13 @@ CREATE TRIGGER mt_eventos_contrato_solo_insercion BEFORE UPDATE OR DELETE ON eve
 
 DROP TRIGGER IF EXISTS mt_anclajes_mock_solo_insercion ON anclajes_mock;
 CREATE TRIGGER mt_anclajes_mock_solo_insercion BEFORE UPDATE OR DELETE ON anclajes_mock
+  FOR EACH ROW EXECUTE FUNCTION mt_solo_insercion();
+
+DROP TRIGGER IF EXISTS mt_comercio_operaciones_solo_insercion ON comercio_operaciones;
+CREATE TRIGGER mt_comercio_operaciones_solo_insercion BEFORE UPDATE OR DELETE ON comercio_operaciones
+  FOR EACH ROW EXECUTE FUNCTION mt_solo_insercion();
+
+DROP TRIGGER IF EXISTS mt_comercio_evidencias_solo_insercion ON comercio_evidencias;
+CREATE TRIGGER mt_comercio_evidencias_solo_insercion BEFORE UPDATE OR DELETE ON comercio_evidencias
   FOR EACH ROW EXECUTE FUNCTION mt_solo_insercion();
 `;

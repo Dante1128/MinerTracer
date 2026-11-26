@@ -8,6 +8,7 @@ const POR_PAGINA = 200;
 export function aJson(valor: unknown): unknown {
   if (typeof valor === 'bigint') return valor.toString();
   if (valor instanceof Uint8Array) return Buffer.from(valor).toString('hex');
+  if (valor instanceof Map) return Object.fromEntries([...valor].map(([clave, dato]) => [String(clave), aJson(dato)]));
   if (Array.isArray(valor)) return valor.map(aJson);
   if (valor && typeof valor === 'object') {
     return Object.fromEntries(Object.entries(valor).map(([k, v]) => [k, aJson(v)]));
@@ -28,7 +29,7 @@ export function filaDeEvento(evento: { topic: xdr.ScVal[]; value: xdr.ScVal }) {
   let loteId: string | null = null;
   if (tipo.startsWith('laboratorio_')) {
     datos.lab = temas[1];
-  } else if (tipo !== 'configurado') {
+  } else if (tipo !== 'configurado' && tipo !== 'comercio_configurado' && temas[1] != null) {
     loteId = String(temas[1]);
     if (tipo === 'analisis_registrado') datos.analisis_id = temas[2];
   }

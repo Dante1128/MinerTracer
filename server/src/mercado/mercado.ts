@@ -4,7 +4,7 @@ import { ErrorHttp } from '../contexto.ts';
 import type { Db } from '../db/index.ts';
 import * as laboratorios from '../modelos/laboratorios.ts';
 import * as lotes from '../modelos/lotes.ts';
-import { ContratoSoroban, FondosInsuficientes, PASSPHRASE } from '../stellar/contrato.ts';
+import { ContratoSoroban, FondosInsuficientes, funcionInvocada, PASSPHRASE } from '../stellar/contrato.ts';
 import { aJson, IndexadorEventos } from './indexador.ts';
 
 /** Acciones del marketplace que firma la wallet del vendedor o del comprador. */
@@ -33,6 +33,52 @@ export interface Venta {
   vence_garantia: string | null;
 }
 
+/** Importes en unidades mínimas del token del contrato, nunca en bolivianos implícitos. */
+export interface ConfigComercial {
+  version: number;
+  destinatario_plataforma: string;
+  comision_bps: number;
+  comision_minima: string;
+  reintegro_bps: number;
+  reintegro_maximo: string;
+  plazo_entrega_seg: string;
+}
+
+export interface VentaComercial {
+  comision_bps?: number;
+  plazo_entrega_seg?: string;
+  plazo_garantia_seg?: string;
+  orden_id: string | null;
+  comprador_reservado: string | null;
+  vence_publicacion: string | null;
+  condiciones_hash: string | null;
+  comision: string;
+  reintegro: string;
+  total: string;
+  destinatario_plataforma: string | null;
+  vence_entrega: string | null;
+  recepcion: { fecha: string; evidencia_hash: string; acreditador: string } | null;
+  incidencia: { motivo: string; fecha: string } | null;
+  devolucion_hash: string | null;
+}
+
+export interface LiquidacionComercial {
+  orden_id: string | null;
+  vendedor: string;
+  comprador: string;
+  precio: string;
+  comision: string;
+  reintegro: string;
+  total: string;
+  fecha: string;
+  reembolsada?: boolean;
+  recibido_vendedor?: string;
+  recibido_plataforma?: string;
+  devuelto_comprador?: string;
+  comercial?: VentaComercial;
+  [campo: string]: unknown;
+}
+
 export interface ContraAnalisisEnCadena {
   lab: string;
   lab_certificador: string;
@@ -53,17 +99,22 @@ export interface EstadoComercial {
   pureza_bps: number;
   venta: Venta | null;
   contra_analisis: ContraAnalisisEnCadena | null;
+  venta_comercial?: VentaComercial | null;
+  liquidacion?: LiquidacionComercial | null;
 }
 
 /** "100.5" con 7 decimales → 1005000000n. */
 export function aUnidadesMinimas(monto: string, decimales: number): bigint {
   const texto = String(monto ?? '').trim().replace(',', '.');
-  if (!new RegExp(`^\\d+(\\.\\d{1,${decimales}})?$`).test(texto)) {
+  if (!Number.isInteger(decimales) || decimales < 0 || decimales > 18) throw new ErrorHttp(503, 'La precisión del token no está admitida');
+  const expresion = decimales === 0 ? /^\d+$/ : new RegExp(`^\\d+(\\.\\d{1,${decimales}})?$`);
+  if (texto.length > 80 || !expresion.test(texto)) {
     throw new ErrorHttp(400, `Precio inválido: use un número con hasta ${decimales} decimales`);
   }
   const [entero, fraccion = ''] = texto.split('.');
   const valor = BigInt(entero) * 10n ** BigInt(decimales) + BigInt(fraccion.padEnd(decimales, '0') || '0');
   if (valor <= 0n) throw new ErrorHttp(400, 'El precio debe ser mayor que cero');
+  if (valor > (1n << 127n) - 1n) throw new ErrorHttp(400, 'El precio supera el rango permitido');
   return valor;
 }
 
@@ -95,7 +146,54 @@ export class Mercado {
 
   async info() {
     const [token, { tolerancia_bps, plazo_garantia_seg }] = await Promise.all([this.infoToken(), this.leerConfiguracion()]);
-    return { contrato_id: this.contrato.contratoId, red: 'testnet', passphrase: PASSPHRASE, token, tolerancia_bps, plazo_garantia_seg };
+    const comercio = await this.configuracionComercial();
+    return { contrato_id: this.contrato.contratoId, red: 'testnet', passphrase: PASSPHRASE, token, tolerancia_bps, plazo_garantia_seg, comercio };
+  }
+
+  async configuracionComercial(): Promise<ConfigComercial | null> {
+    const valor = await this.leerComercialOpcional('get_comercio');
+    return valor ? aJson(valor) as ConfigComercial : null;
+  }
+
+  async infoComercial() {
+    const [configuracion, token, general] = await Promise.all([this.configuracionComercial(), this.infoToken(), this.leerConfiguracion()]);
+    return { configuracion, token, plazo_garantia_seg: general.plazo_garantia_seg };
+  }
+
+  async ventaComercial(loteId: string): Promise<VentaComercial | null> {
+    const valor = await this.leerComercialOpcional('get_venta_comercial', { lote_id: loteId });
+    return valor ? aJson(valor) as VentaComercial : null;
+  }
+
+  async liquidacion(loteId: string): Promise<LiquidacionComercial | null> {
+    const valor = await this.leerComercialOpcional('get_liquidacion', { lote_id: loteId });
+    return valor ? this.normalizarLiquidacion(valor) : null;
+  }
+
+  async historialLiquidaciones(loteId: string): Promise<LiquidacionComercial[]> {
+    const valor = await this.leerComercialOpcional('get_historial_liquidaciones', { lote_id: loteId });
+    return Array.isArray(valor) ? valor.map((fila) => this.normalizarLiquidacion(fila)) : [];
+  }
+
+  async ordenCancelada(ordenId: string): Promise<boolean> {
+    return (await this.leerComercialOpcional('get_orden_cancelada', { orden_id: ordenId })) === true;
+  }
+
+  private normalizarLiquidacion(valor: unknown): LiquidacionComercial {
+    const plano = aJson(valor) as LiquidacionComercial & { resultado?: { tag: string } | string };
+    return { ...plano, orden_id: plano.comercial?.orden_id ?? plano.orden_id ?? null,
+      reembolsada: (typeof plano.resultado === 'string' ? plano.resultado : plano.resultado?.tag) === 'Reembolsada' };
+  }
+
+  private async leerComercialOpcional(metodo: string, argumentos: Record<string, unknown> = {}): Promise<unknown | null> {
+    try {
+      return await this.contrato.leer(metodo, argumentos);
+    } catch (error) {
+      // Un contrato de la versión anterior sigue verificando sus análisis; no fingimos que cobra comisiones.
+      if (error instanceof Error && error.message === `El contrato no tiene el método ${metodo}`) return null;
+      if ([SIN_VENTA, LOTE_INEXISTENTE, 34, 43].includes(codigoDe(error) ?? -1)) return null;
+      throw error;
+    }
   }
 
   async estadoLote(loteId: string): Promise<EstadoComercial | null> {
@@ -106,9 +204,11 @@ export class Mercado {
       if (codigoDe(error) === LOTE_INEXISTENTE) return null;
       throw error;
     }
-    const [venta, contra] = await Promise.all([
+    const [venta, contra, comercial, liquidacion] = await Promise.all([
       this.leerOpcional('get_sale', loteId, SIN_VENTA),
       this.leerOpcional('get_counter_analysis', loteId, SIN_CONTRA_ANALISIS),
+      this.ventaComercial(loteId),
+      this.liquidacion(loteId),
     ]);
     const plano = aJson(lote) as Omit<EstadoComercial, 'estado' | 'venta' | 'contra_analisis'> & { estado: { tag: string } };
     const contraJson = contra ? (aJson(contra) as ContraAnalisisEnCadena & { fecha: string }) : null;
@@ -124,6 +224,8 @@ export class Mercado {
       contra_analisis: contraJson
         ? { ...contraJson, fecha: new Date(Number(contraJson.fecha) * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z') }
         : null,
+      venta_comercial: comercial,
+      liquidacion,
     };
   }
 
@@ -164,7 +266,8 @@ export class Mercado {
   }
 
   /** Transacción sin firmar para que la firme la wallet de `cuenta`. */
-  async prepararTransaccion(accion: Accion, cuenta: string, loteId: string, precio?: string): Promise<string> {
+  async prepararTransaccion(accion: Accion, cuenta: string, loteId: string, precio?: string,
+    esperado?: { total: string; analisis_id: string; version: number; orden_id?: string }): Promise<string> {
     switch (accion) {
       case 'list_batch': {
         const { decimales } = await this.infoToken();
@@ -173,6 +276,18 @@ export class Mercado {
       }
       case 'buy': {
         await this.comprobarSaldo(cuenta, loteId);
+        const estado = await this.estadoLote(loteId);
+        if (estado?.venta && estado.venta_comercial) {
+          if (!esperado || esperado.total !== estado.venta_comercial.total || esperado.analisis_id !== estado.venta.analisis_id || esperado.version !== estado.venta.version) {
+            throw new ErrorHttp(409, 'El precio o el análisis cambió; actualice el detalle antes de comprar');
+          }
+          if ((esperado.orden_id ?? '') !== (estado.venta_comercial.orden_id ?? '')) {
+            throw new ErrorHttp(409, 'El lote ahora pertenece a otro acuerdo; actualice el detalle antes de comprar');
+          }
+          return this.contrato.prepararTransaccion('financiar_orden', { comprador: cuenta, lote_id: loteId,
+            orden_id: estado.venta_comercial.orden_id ?? '', total_esperado: BigInt(estado.venta_comercial.total),
+            analisis_id_esperado: estado.venta.analisis_id, version_esperada: estado.venta.version }, cuenta);
+        }
         return this.contrato.prepararTransaccion('buy', { comprador: cuenta, lote_id: loteId }, cuenta);
       }
       case 'confirm':
@@ -185,7 +300,8 @@ export class Mercado {
   }
 
   async enviarTransaccion(accion: Accion, cuenta: string, xdrFirmado: string) {
-    const resultado = await this.contrato.enviarFirmada(xdrFirmado, { funcion: accion, cuenta });
+    const funcion = accion === 'buy' && funcionInvocada(xdrFirmado) === 'financiar_orden' ? 'financiar_orden' : accion;
+    const resultado = await this.contrato.enviarFirmada(xdrFirmado, { funcion, cuenta });
     await this.indexador.sincronizar().catch(() => {});
     return resultado;
   }
@@ -197,9 +313,11 @@ export class Mercado {
     const token = await this.infoToken();
     const tokenContrato = new ContratoSoroban(this.contrato.rpcUrl, token.contrato);
     const saldo = await tokenContrato.leer<bigint>('balance', { id: cuenta }).catch(() => 0n);
-    if (saldo < venta.precio) {
+    const comercial = await this.ventaComercial(loteId);
+    const total = comercial ? BigInt(comercial.total) : venta.precio;
+    if (saldo < total) {
       const error = new FondosInsuficientes();
-      error.message = `Fondos insuficientes: el lote cuesta ${formatoMonto(venta.precio, token)} y la cuenta tiene ${formatoMonto(saldo, token)}`;
+      error.message = `Fondos insuficientes: el total con comisión es ${formatoMonto(total, token)} y la cuenta tiene ${formatoMonto(saldo, token)}`;
       throw error;
     }
   }
@@ -218,7 +336,7 @@ export class Mercado {
       const config = await this.contrato.leer<{ token: string }>('get_config');
       const token = new ContratoSoroban(this.contrato.rpcUrl, config.token);
       const [simbolo, decimales] = await Promise.all([token.leer<string>('symbol'), token.leer<number>('decimals')]);
-      // Un activo clásico (no nativo) devuelve "CODIGO:EMISOR"; solo interesa el código.
+      // Un activo clásico devuelve "CODIGO:EMISOR"; el contrato sigue identificando la moneda completa.
       return { contrato: config.token, simbolo: simbolo === 'native' ? 'XLM' : simbolo.split(':')[0], decimales: Number(decimales) };
     })().catch((error) => {
       this.token = null;
