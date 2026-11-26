@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet } from 'react-router';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useState } from 'react';
 import { anclajeReal, useInfoServidor } from '../infoServidor.ts';
 import { BotonWallet } from './Mercado.tsx';
@@ -9,13 +9,15 @@ export function Logo({ className = 'h-8 w-8' }: { className?: string }) {
 }
 
 const enlace = ({ isActive }: { isActive: boolean }) =>
-  `shrink-0 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition ${isActive ? 'bg-stone-800 text-white' : 'text-stone-300 hover:text-white'}`;
+  `shrink-0 rounded-lg px-1.5 py-2 text-xs font-medium whitespace-nowrap transition sm:px-3 sm:text-sm ${isActive ? 'bg-stone-800 text-white' : 'text-stone-300 hover:text-white'}`;
 
 const enlacePortal = ({ isActive }: { isActive: boolean }) =>
   `shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition ${isActive ? 'border-mineral-500 text-stone-900' : 'border-transparent text-stone-600 hover:text-stone-900'}`;
 
 export function Layout() {
   const { usuario, salir } = useSesion();
+  const ubicacion = useLocation();
+  const navegar = useNavigate();
   const [errorSalida, setErrorSalida] = useState<string | null>(null);
   const [saliendo, setSaliendo] = useState(false);
   const cerrar = async () => {
@@ -29,32 +31,27 @@ export function Layout() {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="bg-stone-900 print:hidden">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3">
+        <nav className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3" aria-label="Navegación principal">
           <Link to="/" className="flex shrink-0 items-center gap-2 text-lg font-bold tracking-tight text-white">
             <Logo />
-            <span className="hidden sm:inline">MinerTrace</span>
+            <span>MinerTrace</span>
           </Link>
-          <div className="flex min-w-0 items-center gap-1">
-            {/* En pantallas angostas los enlaces se desplazan en vez de romper la barra. */}
-            <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+          {anclajeReal(info) && <span className="ml-auto sm:order-last"><BotonWallet /></span>}
+          <div className="w-full min-w-0 sm:ml-auto sm:w-auto">
+            <div className="grid grid-cols-4 items-center gap-1 border-t border-stone-800 pt-2 text-center sm:flex sm:border-0 sm:pt-0">
               <NavLink to="/verificar" className={enlace}>
                 Verificar
               </NavLink>
-              <NavLink to="/mercado" className={enlace}>
-                Mercado
+              <NavLink to="/comercio" className={enlace}>
+                <span className="sm:hidden">Mercado</span><span className="hidden sm:inline">Comprar y vender</span>
               </NavLink>
-              <NavLink to="/mis-lotes" className={enlace}>
-                Mis lotes
+              <NavLink to="/operaciones" className={enlace}>
+                Operaciones
               </NavLink>
               <NavLink to="/laboratorio" className={enlace}>
                 Laboratorio
               </NavLink>
             </div>
-            {anclajeReal(info) && (
-              <span className="ml-1 shrink-0">
-                <BotonWallet />
-              </span>
-            )}
           </div>
         </nav>
       </header>
@@ -63,7 +60,13 @@ export function Layout() {
       {usuario && (
         <div className="border-b border-stone-200 bg-white print:hidden">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4">
-            <div className="flex min-w-0 items-center overflow-x-auto">
+            <div className="min-w-0 flex-1 py-2 sm:hidden">
+              <label className="sr-only" htmlFor="navegacion-laboratorio">Secciones del laboratorio</label>
+              <select id="navegacion-laboratorio" className="campo" value={ubicacion.pathname.startsWith('/laboratorio/analisis/') ? '/laboratorio' : ubicacion.pathname.startsWith('/laboratorio') ? ubicacion.pathname : ''} onChange={(evento) => { if (evento.target.value) navegar(evento.target.value); }}>
+                <option value="">Ir al laboratorio…</option><option value="/laboratorio">Panel de análisis</option><option value="/laboratorio/nuevo">Registrar análisis</option><option value="/laboratorio/contra-analisis">Contraanálisis</option><option value="/laboratorio/comercio">Entregas y ensayos</option><option value="/laboratorio/cuenta">Mi cuenta</option>{usuario.rol === 'supervisor' && <option value="/laboratorio/usuarios">Usuarios</option>}
+              </select>
+            </div>
+            <div className="hidden min-w-0 items-center overflow-x-auto sm:flex">
               <NavLink to="/laboratorio" end className={enlacePortal}>
                 Panel
               </NavLink>
@@ -73,6 +76,7 @@ export function Layout() {
               <NavLink to="/laboratorio/contra-analisis" className={enlacePortal}>
                 Contra-análisis
               </NavLink>
+              <NavLink to="/laboratorio/comercio" className={enlacePortal}>Entregas y ensayos</NavLink>
               <NavLink to="/laboratorio/cuenta" className={enlacePortal}>Mi cuenta</NavLink>
               {usuario.rol === 'supervisor' && <NavLink to="/laboratorio/usuarios" className={enlacePortal}>Usuarios</NavLink>}
             </div>
@@ -93,8 +97,9 @@ export function Layout() {
         <Outlet />
       </main>
       <footer className="border-t border-stone-200 py-6 text-center text-xs text-stone-500 print:hidden">
-        MinerTrace · Integridad verificable de análisis minerales ·{' '}
+        MinerTrace · Acuerdos claros, origen documentado ·{' '}
         {info === null ? 'Prototipo' : anclajeReal(info) ? `Anclado en Stellar ${info.red}` : 'Prototipo (anclaje simulado)'}
+        <div className="mt-3 flex flex-wrap justify-center gap-5"><Link to="/mercado" className="hover:text-stone-900">Lotes certificados</Link><Link to="/mis-lotes" className="hover:text-stone-900">Mis lotes</Link><Link to="/verificar" className="hover:text-stone-900">Verificar un informe</Link></div>
       </footer>
     </div>
   );
